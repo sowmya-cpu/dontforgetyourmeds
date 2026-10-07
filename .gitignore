@@ -1,0 +1,23 @@
+# Eclipse workspace
+.metadata/
+
+# Frontend
+Medicine-Assistant-frontend/node_modules/
+Medicine-Assistant-frontend/dist/
+Medicine-Assistant-frontend/.env
+Medicine-Assistant-frontend/.env.*
+
+# Backend
+Medicine-Assistant-backend/target/
+Medicine-Assistant-backend/data/
+Medicine-Assistant-backend/.env
+Medicine-Assistant-backend/.env.*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

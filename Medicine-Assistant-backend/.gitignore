@@ -1,0 +1,18 @@
+# Maven
+target/
+
+# H2 database
+data/
+*.mv.db
+*.trace.db
+
+# IDE
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
