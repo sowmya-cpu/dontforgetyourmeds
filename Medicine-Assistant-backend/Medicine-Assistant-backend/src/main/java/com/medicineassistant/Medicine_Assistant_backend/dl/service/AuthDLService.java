@@ -6,5 +6,7 @@ public interface AuthDLService {
 	 boolean existsByEmail(String email);
 
 	 String signup(User user);
+	 
+	 User findByEmail(String email);
 
 }
