@@ -67,3 +67,13 @@ body {
 .welcome-signin:hover {
   color: #0a58ca;
 }
+
+/* Dashboard card hover effect */
+.dashboard-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+}

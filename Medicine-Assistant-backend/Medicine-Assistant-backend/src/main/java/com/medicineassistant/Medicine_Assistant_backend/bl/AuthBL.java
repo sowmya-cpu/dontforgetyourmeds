@@ -15,4 +15,7 @@ public class AuthBL {
         return authDLServiceImpl.signup(user);
     }
 	
+	public User findByEmail(String email) {
+	    return authDLServiceImpl.findByEmail(email);
+	}
 }
