@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { registerDevice } from "../webauthn";
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +24,8 @@ function Login() {
     });
 
     const result = await response.text();
-
+console.log("Login status:", response.status);
+console.log("Login response:", result);
     if (response.ok) {
       localStorage.setItem("token", result);
 
@@ -132,7 +134,28 @@ function Login() {
             Sign Up
           </Link>
         </div>
+        <button
+  type="button"
+  className="btn btn-outline-primary btn-lg w-100 mt-3"
+  onClick={async () => {
+    try {
+      const token = localStorage.getItem("token");
 
+      if (!token) {
+        toast.error("Please sign in first");
+        return;
+      }
+
+      const message = await registerDevice(token);
+      toast.success(message);
+    } catch (error) {
+      console.error("Device registration error:", error);
+      toast.error("Device registration failed");
+    }
+  }}
+>
+  Register Device Authentication
+</button>
       </div>
     </div>
   );
