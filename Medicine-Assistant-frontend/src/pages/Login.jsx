@@ -6,7 +6,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-//   const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
   e.preventDefault();
@@ -30,7 +30,7 @@ console.log("Login response:", result);
       localStorage.setItem("token", result);
 
       toast.success("Login successful");
-
+      navigate("/dashboard");
     //   console.log("JWT:", result);
     } else {
       toast.error(result);

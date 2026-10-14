@@ -1,6 +1,10 @@
 package com.medicineassistant.Medicine_Assistant_backend.controller;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,5 +60,20 @@ public class AuthController {
 	@GetMapping("/test")
 	public String test() {
 	    return "Authenticated successfully";
+	}
+	
+	@GetMapping("/profile")
+	public Map<String, String> profile(Authentication authentication) {
+
+	    String email = authentication.getName();
+
+	    User user = authBl.findByEmail(email);
+
+	    Map<String, String> profile = new HashMap<>();
+
+	    profile.put("username", user.getUsername());
+	    profile.put("email", user.getEmail());
+
+	    return profile;
 	}
 }

@@ -33,6 +33,11 @@ public class AuthDLServiceImpl implements AuthDLService {
 
         return "Signup successful";
     }
+
+	@Override
+	public User findByEmail(String email) {
+		return userRepository.findByEmail(email).orElse(null);
+	}
 	
 	
 
