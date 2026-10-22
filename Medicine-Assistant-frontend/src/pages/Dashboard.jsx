@@ -1,5 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { authenticateDevice } from "../webauthn";
 
 import medicineImage from "../assets/images/medicine.png";
 import scheduleImage from "../assets/images/schedule.png";
@@ -7,62 +9,58 @@ import prescriptionImage from "../assets/images/prescription.png";
 import assistantImage from "../assets/images/assistant.png";
 
 function Dashboard() {
-
   const navigate = useNavigate();
 
+  const handleDeviceAuthentication = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        toast.error("Please sign in first");
+        navigate("/login");
+        return;
+      }
+
+      const message = await authenticateDevice(token);
+      toast.success(message);
+    } catch (error) {
+      console.error("Device authentication error:", error);
+      toast.error(error.message || "Device authentication failed");
+    }
+  };
+
   return (
-
     <div className="container py-4">
-
       {/* Next Medicine */}
       <div className="card border-0 shadow-sm mb-4">
-
         <div className="card-body d-flex justify-content-between align-items-center">
-
           <div>
-            <small className="text-muted">
-              Next Medicine
-            </small>
+            <small className="text-muted">Next Medicine</small>
 
-            <h2 className="fw-bold mb-0">
-              in 1 hour
-            </h2>
+            <h2 className="fw-bold mb-0">in 1 hour</h2>
           </div>
 
           <div className="text-end">
-            <strong>
-              Paracetamol 500 mg
-            </strong>
-
+            <strong>Paracetamol 500 mg</strong>
             <br />
-
             <small className="text-muted">
               1 tablet • After food
             </small>
           </div>
 
-          <span className="fs-3">
-            ›
-          </span>
-
+          <span className="fs-3">›</span>
         </div>
-
       </div>
-
 
       {/* Quick Action Cards */}
       <div className="row g-3">
-
-
         {/* My Medicines */}
         <div className="col-6 col-lg-3">
-
           <div
             className="card border-0 shadow-sm h-100 text-center p-3 dashboard-card"
             onClick={() => navigate("/medicines")}
             style={{ cursor: "pointer" }}
           >
-
             <img
               src={medicineImage}
               alt="My Medicines"
@@ -70,32 +68,25 @@ function Dashboard() {
               style={{
                 width: "100px",
                 height: "100px",
-                objectFit: "contain"
+                objectFit: "contain",
               }}
             />
 
-            <h5>
-              My Medicines
-            </h5>
+            <h5>My Medicines</h5>
 
             <small className="text-muted d-none d-lg-block">
               View and manage your medicines
             </small>
-
           </div>
-
         </div>
-
 
         {/* Today's Schedule */}
         <div className="col-6 col-lg-3">
-
           <div
             className="card border-0 shadow-sm h-100 text-center p-3 dashboard-card"
             onClick={() => navigate("/schedule")}
             style={{ cursor: "pointer" }}
           >
-
             <img
               src={scheduleImage}
               alt="Today's Schedule"
@@ -103,32 +94,25 @@ function Dashboard() {
               style={{
                 width: "100px",
                 height: "100px",
-                objectFit: "contain"
+                objectFit: "contain",
               }}
             />
 
-            <h5>
-              Today's Schedule
-            </h5>
+            <h5>Today's Schedule</h5>
 
             <small className="text-muted d-none d-lg-block">
               Check today's medicine schedule
             </small>
-
           </div>
-
         </div>
-
 
         {/* Add Prescription */}
         <div className="col-6 col-lg-3">
-
           <div
             className="card border-0 shadow-sm h-100 text-center p-3 dashboard-card"
             onClick={() => navigate("/prescription")}
             style={{ cursor: "pointer" }}
           >
-
             <img
               src={prescriptionImage}
               alt="Add Prescription"
@@ -136,32 +120,25 @@ function Dashboard() {
               style={{
                 width: "100px",
                 height: "100px",
-                objectFit: "contain"
+                objectFit: "contain",
               }}
             />
 
-            <h5>
-              Add Prescription
-            </h5>
+            <h5>Add Prescription</h5>
 
             <small className="text-muted d-none d-lg-block">
               Upload and extract medicines
             </small>
-
           </div>
-
         </div>
-
 
         {/* Ask Assistant */}
         <div className="col-6 col-lg-3">
-
           <div
             className="card border-0 shadow-sm h-100 text-center p-3 dashboard-card"
             onClick={() => navigate("/assistant")}
             style={{ cursor: "pointer" }}
           >
-
             <img
               src={assistantImage}
               alt="Ask Assistant"
@@ -169,24 +146,37 @@ function Dashboard() {
               style={{
                 width: "100px",
                 height: "100px",
-                objectFit: "contain"
+                objectFit: "contain",
               }}
             />
 
-            <h5>
-              Ask Assistant
-            </h5>
+            <h5>Ask Assistant</h5>
 
             <small className="text-muted d-none d-lg-block">
               Get answers about your medicines
             </small>
-
           </div>
-
         </div>
-
       </div>
 
+      {/* Temporary WebAuthn Test */}
+      <div className="card border-0 shadow-sm mt-4">
+        <div className="card-body text-center p-4">
+          <h5 className="fw-bold">Device Authentication</h5>
+
+          <p className="text-muted">
+            Test authentication using your registered device passkey.
+          </p>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleDeviceAuthentication}
+          >
+            Test Device Authentication
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

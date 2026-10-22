@@ -8,7 +8,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import com.yubico.webauthn.AssertionRequest;
+import com.yubico.webauthn.AssertionResult;
+import com.yubico.webauthn.FinishAssertionOptions;
+import com.yubico.webauthn.StartAssertionOptions;
+import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
+import com.yubico.webauthn.data.ClientAssertionExtensionOutputs;
+import com.yubico.webauthn.data.PublicKeyCredential;
 import com.yubico.webauthn.RelyingParty;
 import com.yubico.webauthn.StartRegistrationOptions;
 import com.yubico.webauthn.data.ByteArray;
@@ -17,7 +23,9 @@ import com.yubico.webauthn.data.UserIdentity;
 import org.springframework.web.bind.annotation.RequestBody;
 import com.yubico.webauthn.FinishRegistrationOptions;
 import com.yubico.webauthn.RegistrationResult;
+import org.springframework.web.bind.annotation.GetMapping;
 import com.yubico.webauthn.data.PublicKeyCredential;
+
 import com.yubico.webauthn.data.AuthenticatorAttestationResponse;
 import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
 import com.medicineassistant.Medicine_Assistant_backend.model.User;
@@ -32,6 +40,8 @@ public class WebAuthnRegistrationController {
 	private final WebAuthnCredentialRepository credentialRepository;
 	private final Map<String, PublicKeyCredentialCreationOptions> registrationRequests =
 	        new ConcurrentHashMap<>();
+	private final Map<String, AssertionRequest> authenticationRequests =
+	        new ConcurrentHashMap<>();
 	private final SecureRandom secureRandom = new SecureRandom();
     public WebAuthnRegistrationController(
             RelyingParty relyingParty,
@@ -43,26 +53,92 @@ public class WebAuthnRegistrationController {
         this.credentialRepository = credentialRepository;
     }
     @PostMapping("/register/start")
-    public PublicKeyCredentialCreationOptions startRegistration(Authentication authentication) {
-    	 String email = authentication.getName();
+    public PublicKeyCredentialCreationOptions startRegistration(
+            Authentication authentication) {
 
-    	    UserIdentity user = UserIdentity.builder()
-    	            .name(email)
-    	            .displayName(email)
-    	            .id(new ByteArray(email.getBytes()))
-    	            .build();
-    	       
-    	    PublicKeyCredentialCreationOptions options =
-    	            relyingParty.startRegistration(
-    	                    StartRegistrationOptions.builder()
-    	                            .user(user)
-    	                            .build()
-    	            );
-    	    registrationRequests.put(email, options);
-    	    System.out.println(options.toCredentialsCreateJson());
-    	    return options;
+        String email = authentication.getName();
+
+        UserIdentity user = UserIdentity.builder()
+                .name(email)
+                .displayName(email)
+                .id(new ByteArray(email.getBytes()))
+                .build();
+
+        PublicKeyCredentialCreationOptions options =
+                relyingParty.startRegistration(
+                        StartRegistrationOptions.builder()
+                                .user(user)
+                                .authenticatorSelection(
+                                        com.yubico.webauthn.data.AuthenticatorSelectionCriteria
+                                                .builder()
+                                                .authenticatorAttachment(
+                                                        com.yubico.webauthn.data.AuthenticatorAttachment.PLATFORM)
+                                                .userVerification(
+                                                        com.yubico.webauthn.data.UserVerificationRequirement.REQUIRED)
+                                                .build()
+                                )
+                                .build()
+                );
+
+        registrationRequests.put(email, options);
+
+        return options;
     }
-    
+    @PostMapping("/authenticate/start")
+    public AssertionRequest startAuthentication(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        AssertionRequest request = relyingParty.startAssertion(
+                StartAssertionOptions.builder()
+                        .username(email)
+                        .userVerification(
+                                com.yubico.webauthn.data.UserVerificationRequirement.REQUIRED
+                        )
+                        .build()
+        );
+
+        authenticationRequests.put(email, request);
+
+        return request;
+    }
+    @PostMapping("/authenticate/finish")
+    public String finishAuthentication(
+            Authentication authentication,
+            @RequestBody String responseJson) {
+
+        String email = authentication.getName();
+
+        AssertionRequest request = authenticationRequests.get(email);
+
+        if (request == null) {
+            throw new IllegalStateException(
+                    "Authentication request not found. Start authentication again.");
+        }
+
+        try {
+            PublicKeyCredential<AuthenticatorAssertionResponse,
+                    ClientAssertionExtensionOutputs> response =
+                    PublicKeyCredential.parseAssertionResponseJson(responseJson);
+
+            AssertionResult result = relyingParty.finishAssertion(
+                    FinishAssertionOptions.builder()
+                            .request(request)
+                            .response(response)
+                            .build());
+
+            if (!result.isSuccess()) {
+                throw new IllegalArgumentException("Device authentication failed.");
+            }
+
+            authenticationRequests.remove(email);
+
+            return "Device authentication successful";
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Device authentication verification failed.", e);
+        }
+    }
     @PostMapping("/register/finish")
     public String finishRegistration(
             Authentication authentication,
@@ -113,6 +189,18 @@ try {
             throw new IllegalStateException(
                     "Registration verification failed.", e);
         }
+    }
+    @GetMapping("/status")
+    public Map<String, Boolean> checkPasskeyStatus(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
+        boolean registered = credentialRepository.existsByUser(user);
+
+        return Map.of("registered", registered);
     }
     
 }

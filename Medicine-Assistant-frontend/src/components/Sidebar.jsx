@@ -39,7 +39,7 @@ function Sidebar() {
 
         {/* My Medicines */}
         <NavLink
-          to="/medicines"
+          to="/my-medicines"
           className={({ isActive }) =>
             `btn text-start ${
               isActive ? "btn-primary" : "btn-dark"
