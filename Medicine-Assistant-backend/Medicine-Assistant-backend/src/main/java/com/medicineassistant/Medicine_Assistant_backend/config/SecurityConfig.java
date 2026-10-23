@@ -33,6 +33,7 @@ public class SecurityConfig {
 	        .authorizeHttpRequests(auth -> auth
 	            .requestMatchers("/api/auth/signup").permitAll()
 	            .requestMatchers("/api/auth/login").permitAll()
+	            
 	            .requestMatchers("/h2-console/**").permitAll()
 	            .anyRequest().authenticated()
 	        )
@@ -55,7 +56,7 @@ public class SecurityConfig {
 	    CorsConfiguration configuration = new CorsConfiguration();
 
 	    configuration.setAllowedOrigins(
-	        List.of("http://localhost:5173")
+	        List.of("http://localhost:5173",  "http://localhost:4173")
 	    );
 
 	    configuration.setAllowedMethods(
