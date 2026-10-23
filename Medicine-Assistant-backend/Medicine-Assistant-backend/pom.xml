@@ -101,6 +101,7 @@
 		    <version>0.12.6</version>
 		    <scope>runtime</scope>
 		</dependency>
+<<<<<<< HEAD
 		<dependency>
     <groupId>io.github.cdimascio</groupId>
     <artifactId>dotenv-java</artifactId>
@@ -111,6 +112,40 @@
     <artifactId>webauthn-server-core</artifactId>
     <version>2.7.0</version>
 </dependency>
+=======
+		
+		
+		<dependency>
+		    <groupId>nl.martijndwars</groupId>
+		    <artifactId>web-push</artifactId>
+		    <version>5.1.2</version>
+		</dependency>
+		
+		
+		<dependency>
+		    <groupId>org.bouncycastle</groupId>
+		    <artifactId>bcprov-jdk18on</artifactId>
+		    <version>1.80</version>
+		</dependency>
+		
+		
+		<dependency>
+		    <groupId>org.apache.httpcomponents</groupId>
+		    <artifactId>httpcore</artifactId>
+		    <version>4.4.16</version>
+		</dependency>
+
+
+		
+		<dependency>
+		    <groupId>org.bitbucket.b_c</groupId>
+		    <artifactId>jose4j</artifactId>
+		    <version>0.9.6</version>
+		</dependency>
+
+
+
+>>>>>>> dashboard
 	</dependencies>
 
 	<build>

@@ -1,12 +1,15 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import {getMedicineById, saveMedicine,updateMedicine,} from "../database/medicineDB"; 
+import { toast } from "react-toastify";
+import { syncReminderSchedules } from "../utils/reminderSync";
 
 import cameraImage from "../assets/images/take-photo.png";
 import galleryImage from "../assets/images/choose-gallery.png";
 
-function AddManually() {
 
-  const navigate = useNavigate();
+
+function AddManually() {
 
   const [medicineName, setMedicineName] = useState("");
   const [strength, setStrength] = useState("");
@@ -15,10 +18,65 @@ function AddManually() {
   const [frequency, setFrequency] = useState("1");
   const [timesOfDay, setTimesOfDay] = useState(["Morning"]);
   const [foodInstruction, setFoodInstruction] = useState("After food");
+  const [purpose, setPurpose] = useState("");
+  const [customPurpose, setCustomPurpose] = useState("");
   const [startDate, setStartDate] = useState("");
   const [duration, setDuration] = useState("");
   const [durationUnit, setDurationUnit] = useState("Days");
   const [medicineImage, setMedicineImage] = useState(null);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const medicineId = location.state?.medicineId;
+  const isEditing = medicineId !== undefined;
+
+  useEffect(() => {
+      if (!isEditing) return;
+
+      const loadMedicine = async () => {
+        try {
+          const medicine = await getMedicineById(medicineId);
+
+          if (!medicine) {
+            toast.error("Medicine not found.");
+            navigate("/medicines");
+            return;
+          }
+
+          setMedicineName(medicine.medicineName ?? "");
+          setStrength(medicine.strength ?? "");
+          setMedicineType(medicine.medicineType ?? "Tablet");
+          setDose(String(medicine.dose ?? "1"));
+          setFrequency(String(medicine.frequency ?? "1"));
+          setTimesOfDay(medicine.timesOfDay ?? ["Morning"]);
+          setFoodInstruction(
+            medicine.foodInstruction ?? "After food"
+          );
+          const predefinedPurposes = ["Fever","Cold","Cough","Headache","Pain","Allergy",];
+
+          if (predefinedPurposes.includes(medicine.purpose)) {
+            setPurpose(medicine.purpose);
+            setCustomPurpose("");
+          } else if (medicine.purpose) {
+            setPurpose("Other");
+            setCustomPurpose(medicine.purpose);
+          } else {
+            setPurpose("");
+            setCustomPurpose("");
+          }
+          setStartDate(medicine.startDate ?? "");
+          setDuration(String(medicine.duration ?? ""));
+          setDurationUnit(medicine.durationUnit ?? "Days");
+          setMedicineImage(medicine.medicineImage ?? null);
+        } catch (error) {
+          console.error("Error loading medicine:", error);
+          toast.error("Unable to load medicine.");
+        }
+      };
+
+      loadMedicine();
+    }, [isEditing, medicineId, navigate]);
 
 
   // Change frequency
@@ -62,24 +120,74 @@ function AddManually() {
 
 
   // Submit
-  const handleSubmit = (event) => {
-
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    console.log({
-      medicineName,
-      strength,
+    if (!medicineImage) {
+      toast.error("Please upload a medicine image");
+      return;
+    }
+
+    const medicineData = {
+      medicineName: medicineName.trim(),
+      strength: strength.trim(),
       medicineType,
-      dose,
-      frequency,
+      dose: Number(dose),
+      frequency: Number(frequency),
       timesOfDay,
       foodInstruction,
+      purpose:purpose === "Other"? customPurpose.trim() : purpose,
       startDate,
-      duration,
+      duration: Number(duration),
       durationUnit,
-      medicineImage
+      medicineImage,
+    };
+
+    try {
+  if (isEditing) {
+    await updateMedicine({
+      ...medicineData,
+      id: Number(medicineId),
     });
 
+    // Sync reminder slots after updating medicine
+    // if (localStorage.getItem("remindersEnabled") === "true") {
+      await syncReminderSchedules();
+    // }
+
+    toast.success("Medicine updated successfully!");
+    navigate("/medicines");
+  } else {
+    await saveMedicine(medicineData);
+
+    // Sync reminder slots after adding medicine
+    // if (localStorage.getItem("remindersEnabled") === "true") {
+      await syncReminderSchedules();
+    // }
+
+    toast.success("Medicine saved successfully!");
+
+    // Clear the form after saving successfully
+    setMedicineName("");
+    setStrength("");
+    setMedicineType("Tablet");
+    setDose("1");
+    setFrequency("1");
+    setTimesOfDay(["Morning"]);
+    setFoodInstruction("After food");
+    setPurpose("");
+    setCustomPurpose("");
+    setStartDate("");
+    setDuration("");
+    setDurationUnit("Days");
+    setMedicineImage(null);
+
+    event.target.reset();
+  }
+  } catch (error) {
+    console.error("Error saving medicine:", error);
+    toast.error("Unable to save medicine. Please try again.");
+  } 
   };
 
 
@@ -302,6 +410,43 @@ function AddManually() {
             </select>
 
           </div>
+
+
+          
+          {/* Purpose of Medicine */}
+          <div className="col-12 col-md-6">
+            <label className="form-label fw-semibold">
+              Purpose of Medicine
+            </label>
+
+            <select
+              className="form-select"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              required
+            >
+              <option value="">Select purpose</option>
+              <option value="Fever">Fever</option>
+              <option value="Cold">Cold</option>
+              <option value="Cough">Cough</option>
+              <option value="Headache">Headache</option>
+              <option value="Pain">Pain</option>
+              <option value="Allergy">Allergy</option>
+              <option value="Other">Other</option>
+            </select>
+
+            {purpose === "Other" && (
+              <input
+                type="text"
+                className="form-control mt-2"
+                placeholder="Enter purpose"
+                value={customPurpose}
+                onChange={(e) => setCustomPurpose(e.target.value)}
+                required
+              />
+            )}
+          </div>
+
 
 
           {/* Start Date */}
