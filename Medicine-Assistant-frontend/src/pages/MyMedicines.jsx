@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 
 const DATABASE_NAME = "MedicationAssistantPrescriptionDB";
 const STORE_NAME = "prescriptions";
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 function openPrescriptionDatabase() {
   return new Promise((resolve, reject) => {
@@ -60,6 +61,39 @@ async function getSavedPrescriptions() {
   }
 }
 
+async function updatePrescription(updatedPrescription) {
+  const database = await openPrescriptionDatabase();
+
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(
+        STORE_NAME,
+        "readwrite"
+      );
+
+      transaction.objectStore(STORE_NAME).put(updatedPrescription);
+
+      transaction.oncomplete = () => resolve();
+
+      transaction.onerror = () => {
+        reject(
+          transaction.error ||
+            new Error("Could not save the medicine image.")
+        );
+      };
+
+      transaction.onabort = () => {
+        reject(
+          transaction.error ||
+            new Error("Saving the medicine image was cancelled.")
+        );
+      };
+    });
+  } finally {
+    database.close();
+  }
+}
+
 async function deletePrescription(prescriptionId) {
   const database = await openPrescriptionDatabase();
 
@@ -97,7 +131,9 @@ function MyMedicines() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [uploadingMedicineId, setUploadingMedicineId] = useState(null);
 
   const loadPrescriptions = useCallback(async () => {
     setLoading(true);
@@ -129,6 +165,86 @@ function MyMedicines() {
     loadPrescriptions();
   }, [loadPrescriptions]);
 
+  const handleMedicineImageUpload = async (
+    prescription,
+    medicine,
+    event
+  ) => {
+    const file = event.target.files?.[0];
+
+    // Allow the same image to be selected again later.
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid medicine image.");
+      setSuccess("");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError("Please select an image smaller than 10 MB.");
+      setSuccess("");
+      return;
+    }
+
+    const medicineId =
+      medicine.id || medicine.medicineName;
+
+    setUploadingMedicineId(medicineId);
+    setError("");
+    setSuccess("");
+
+    try {
+      const updatedMedicines = prescription.medicines.map(
+        (item) => {
+          const itemId = item.id || item.medicineName;
+
+          if (itemId !== medicineId) {
+            return item;
+          }
+
+          return {
+            ...item,
+            medicineImageBlob: file,
+            medicineImageName: file.name,
+            medicineImageType: file.type,
+          };
+        }
+      );
+
+      const updatedPrescription = {
+        ...prescription,
+        medicines: updatedMedicines,
+      };
+
+      await updatePrescription(updatedPrescription);
+
+      setPrescriptions((previous) =>
+        previous.map((item) =>
+          item.id === prescription.id
+            ? updatedPrescription
+            : item
+        )
+      );
+
+      setSuccess(
+        `Image saved for ${medicine.medicineName || "the medicine"}.`
+      );
+    } catch (err) {
+      console.error("Saving medicine image failed:", err);
+
+      setError(
+        err.message || "Could not save the medicine image."
+      );
+    } finally {
+      setUploadingMedicineId(null);
+    }
+  };
+
   const handleDelete = async (prescription) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this prescription and its saved medicine details?"
@@ -140,6 +256,7 @@ function MyMedicines() {
 
     setDeletingId(prescription.id);
     setError("");
+    setSuccess("");
 
     try {
       await deletePrescription(prescription.id);
@@ -147,12 +264,13 @@ function MyMedicines() {
       setPrescriptions((previous) =>
         previous.filter((item) => item.id !== prescription.id)
       );
+
+      setSuccess("Prescription deleted successfully.");
     } catch (err) {
       console.error("Deleting prescription failed:", err);
 
       setError(
-        err.message ||
-          "Could not delete this prescription."
+        err.message || "Could not delete this prescription."
       );
     } finally {
       setDeletingId(null);
@@ -175,13 +293,20 @@ function MyMedicines() {
       </div>
 
       <p className="text-muted mb-4">
-        View your saved prescriptions and medicine details in one place.
-        Your information is stored locally on this device.
+        View your saved prescriptions, medicine details, and
+        individual medicine photos. Your information is stored
+        locally on this device.
       </p>
 
       {error && (
         <div className="alert alert-danger" role="alert">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="alert alert-success" role="status">
+          {success}
         </div>
       )}
 
@@ -198,26 +323,24 @@ function MyMedicines() {
         </div>
       )}
 
-      {!loading &&
-        !error &&
-        prescriptions.length === 0 && (
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-5">
-              <div className="display-5 mb-3" aria-hidden="true">
-                💊
-              </div>
-
-              <h4 className="fw-bold">
-                No saved medicines yet
-              </h4>
-
-              <p className="text-muted mb-0">
-                Upload a prescription, analyze it, review the medicine
-                details, and select Save Prescription.
-              </p>
+      {!loading && !error && prescriptions.length === 0 && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body text-center py-5">
+            <div className="display-5 mb-3" aria-hidden="true">
+              💊
             </div>
+
+            <h4 className="fw-bold">
+              No saved medicines yet
+            </h4>
+
+            <p className="text-muted mb-0">
+              Upload a prescription, analyze it, review the
+              medicine details, and select Save Prescription.
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
       {!loading &&
         prescriptions.map((prescription) => (
@@ -233,7 +356,8 @@ function MyMedicines() {
                   </h5>
 
                   <p className="text-muted small mb-1">
-                    {prescription.imageName || "Prescription image"}
+                    {prescription.imageName ||
+                      "Prescription image"}
                   </p>
 
                   <p className="text-muted small mb-0">
@@ -274,53 +398,100 @@ function MyMedicines() {
               <hr />
 
               <h6 className="fw-bold mb-3">
-                Medicines (
-                {prescription.medicines?.length || 0})
+                Medicines ({prescription.medicines?.length || 0})
               </h6>
 
               {prescription.medicines?.length > 0 ? (
-                prescription.medicines.map((medicine, index) => (
-                  <div
-                    key={
-                      medicine.id ||
-                      `${prescription.id}-medicine-${index}`
-                    }
-                    className="border rounded-3 p-3 mb-3"
-                  >
-                    <h6 className="fw-bold mb-3">
-                      {index + 1}.{" "}
-                      {medicine.medicineName ||
-                        "Unnamed medicine"}
-                    </h6>
+                prescription.medicines.map((medicine, index) => {
+                  const medicineId =
+                    medicine.id || medicine.medicineName;
 
-                    <div className="row g-3">
-                      <MedicineDetail
-                        label="Strength"
-                        value={medicine.strength}
+                  return (
+                    <div
+                      key={`${prescription.id}-${medicineId}-${index}`}
+                      className="border rounded-3 p-3 mb-3"
+                    >
+                      <h6 className="fw-bold mb-3">
+                        {index + 1}.{" "}
+                        {medicine.medicineName ||
+                          "Unnamed medicine"}
+                      </h6>
+
+                      <MedicineImage
+                        imageBlob={medicine.medicineImageBlob}
+                        imageName={medicine.medicineImageName}
                       />
 
-                      <MedicineDetail
-                        label="Dosage"
-                        value={medicine.dosage}
-                      />
+                      <div className="mb-3">
+                        <label
+                          className="form-label fw-semibold"
+                          htmlFor={`medicine-image-${prescription.id}-${index}`}
+                        >
+                          Upload medicine photo
+                        </label>
 
-                      <MedicineDetail
-                        label="Frequency"
-                        value={medicine.frequency}
-                      />
+                        <input
+                          id={`medicine-image-${prescription.id}-${index}`}
+                          type="file"
+                          className="form-control"
+                          accept="image/*"
+                          capture="environment"
+                          disabled={
+                            uploadingMedicineId === medicineId
+                          }
+                          onChange={(event) =>
+                            handleMedicineImageUpload(
+                              prescription,
+                              medicine,
+                              event
+                            )
+                          }
+                        />
 
-                      <MedicineDetail
-                        label="Duration"
-                        value={medicine.duration}
-                      />
+                        <small className="text-muted d-block mt-1">
+                          Choose a clear photo of the actual medicine
+                          or its packaging. Maximum size: 10 MB.
+                        </small>
 
-                      <MedicineDetail
-                        label="Instructions"
-                        value={medicine.instructions}
-                      />
+                        {uploadingMedicineId === medicineId && (
+                          <small
+                            className="text-primary d-block mt-2"
+                            role="status"
+                          >
+                            Saving medicine photo...
+                          </small>
+                        )}
+                      </div>
+
+                      <div className="row g-3">
+                        <MedicineDetail
+                          label="Strength"
+                          value={medicine.strength}
+                        />
+
+                        <MedicineDetail
+                          label="Dosage"
+                          value={medicine.dosage}
+                        />
+
+                        <MedicineDetail
+                          label="Frequency"
+                          value={medicine.frequency}
+                        />
+
+                        <MedicineDetail
+                          label="Duration"
+                          value={medicine.duration}
+                        />
+
+                        <MedicineDetail
+                          label="Instructions"
+                          value={medicine.instructions}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-muted mb-0">
                   No medicine details were saved for this prescription.
@@ -361,7 +532,6 @@ function PrescriptionImage({ imageBlob, imageName }) {
     }
 
     const url = URL.createObjectURL(imageBlob);
-
     setImageUrl(url);
 
     return () => URL.revokeObjectURL(url);
@@ -382,6 +552,48 @@ function PrescriptionImage({ imageBlob, imageName }) {
           objectFit: "contain",
         }}
       />
+    </div>
+  );
+}
+
+function MedicineImage({ imageBlob, imageName }) {
+  const [imageUrl, setImageUrl] = useState("");
+
+  useEffect(() => {
+    if (!imageBlob) {
+      setImageUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(imageBlob);
+    setImageUrl(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [imageBlob]);
+
+  if (!imageUrl) {
+    return (
+      <p className="text-muted small">
+        No individual medicine photo uploaded yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mb-3">
+      <img
+        src={imageUrl}
+        alt={imageName || "Saved medicine photo"}
+        className="img-fluid rounded border"
+        style={{
+          maxHeight: "220px",
+          objectFit: "contain",
+        }}
+      />
+
+      <p className="text-muted small mt-1 mb-0">
+        {imageName || "Saved medicine photo"}
+      </p>
     </div>
   );
 }
