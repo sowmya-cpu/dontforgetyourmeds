@@ -3,10 +3,12 @@ package com.medicineassistant.Medicine_Assistant_backend;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.medicineassistant.Medicine_Assistant_backend.bl.AuthBL;
 
 @SpringBootApplication
+@EnableScheduling
 public class MedicineAssistantBackendApplication {
 
 	public static void main(String[] args) {
