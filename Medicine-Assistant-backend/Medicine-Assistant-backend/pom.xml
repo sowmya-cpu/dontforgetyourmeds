@@ -101,7 +101,6 @@
 		    <version>0.12.6</version>
 		    <scope>runtime</scope>
 		</dependency>
-<<<<<<< HEAD
 		<dependency>
     <groupId>io.github.cdimascio</groupId>
     <artifactId>dotenv-java</artifactId>
@@ -112,7 +111,6 @@
     <artifactId>webauthn-server-core</artifactId>
     <version>2.7.0</version>
 </dependency>
-=======
 		
 		
 		<dependency>
@@ -145,7 +143,6 @@
 
 
 
->>>>>>> dashboard
 	</dependencies>
 
 	<build>

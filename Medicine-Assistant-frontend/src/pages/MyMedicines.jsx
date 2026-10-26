@@ -223,7 +223,22 @@ const handleDelete = async (id) => {
                       <p className="mb-1">
                         <strong>Time:</strong>{" "}
                         {Array.isArray(medicine.timesOfDay)
-                          ? medicine.timesOfDay.join(", ")
+                          ? medicine.timesOfDay
+                              .map((time) => {
+                                const value = time?.toLowerCase().trim();
+
+                                if (value.includes("morning") || value.includes("breakfast"))
+                                  return "Morning";
+
+                                if (value.includes("afternoon") || value.includes("lunch"))
+                                  return "Afternoon";
+
+                                if (value.includes("night") || value.includes("dinner"))
+                                  return "Night";
+
+                                return time;
+                              })
+                              .join(", ")
                           : medicine.timesOfDay}
                       </p>
 

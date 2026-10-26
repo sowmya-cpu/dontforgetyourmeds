@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createWorker } from "tesseract.js";
+import {
+  saveMedicine,
+  getAllMedicines,
+  updateMedicine,
+} from "../database/medicineDB";
 
 const API_URL = "http://localhost:8080/api/prescription-ai/analyze";
 const DATABASE_NAME = "MedicationAssistantPrescriptionDB";
@@ -608,7 +613,62 @@ function UploadPrescription() {
 
       // This function checks existing records by image fingerprint.
       // It updates an existing prescription instead of adding a duplicate.
+      // Save the prescription in its existing prescription database
       const savedRecord = await savePrescriptionLocally(record);
+
+      // Get existing medicines to avoid duplicates when saving again
+      const existingMedicines = await getAllMedicines();
+
+      for (const medicine of record.medicines) {
+        const durationMatch = String(medicine.duration).match(
+          /^\s*(\d+)\s*(.*)\s*$/
+        );
+
+        const medicineData = {
+          medicineName: medicine.medicineName,
+          strength: medicine.strength,
+
+          // Map prescription data to medicineDB fields
+          dose: medicine.dosage,
+          frequency: medicine.frequency,
+          foodInstruction: medicine.foodInstruction || "After food",
+
+          // These fields are not collected in your prescription form
+          purpose: "",
+          timesOfDay: medicine.timesOfDay?.length
+                    ? medicine.timesOfDay
+                    : medicine.instructions
+                      ? [medicine.instructions]
+                      : [],
+          startDate: "",
+          duration: durationMatch
+            ? durationMatch[1]
+            : medicine.duration,
+          durationUnit: durationMatch
+            ? durationMatch[2].trim()
+            : "",
+
+          // Track the source so the same prescription medicine
+          // can be updated instead of saved again
+          prescriptionRecordId: savedRecord.id,
+          prescriptionMedicineId: medicine.id,
+        };
+
+        const existingMedicine = existingMedicines.find(
+          (item) =>
+            item.prescriptionRecordId === savedRecord.id &&
+            item.prescriptionMedicineId === medicine.id
+        );
+
+        if (existingMedicine) {
+          await updateMedicine({
+            ...existingMedicine,
+            ...medicineData,
+          });
+        } else {
+          await saveMedicine(medicineData);
+        }
+      }
 
       currentPrescriptionId.current = savedRecord.id;
 
@@ -616,7 +676,7 @@ function UploadPrescription() {
         "Prescription saved successfully. Duplicate records for this image have been checked."
       );
 
-      navigate("/my-medicines");
+      navigate("/medicines");
     } catch (err) {
       console.error("Save prescription error:", err);
 
