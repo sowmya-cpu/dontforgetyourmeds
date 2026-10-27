@@ -1,557 +1,270 @@
-import React, { useCallback, useEffect, useState } from "react";
 
-const DATABASE_NAME = "MedicationAssistantPrescriptionDB";
-const STORE_NAME = "prescriptions";
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-
-function openPrescriptionDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 1);
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
-    request.onerror = () => {
-      reject(
-        request.error ||
-          new Error("Could not open local medicine storage.")
-      );
-    };
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, {
-          keyPath: "id",
-        });
-      }
-    };
-  });
-}
-
-async function getSavedPrescriptions() {
-  const database = await openPrescriptionDatabase();
-
-  try {
-    return await new Promise((resolve, reject) => {
-      const transaction = database.transaction(
-        STORE_NAME,
-        "readonly"
-      );
-
-      const request = transaction
-        .objectStore(STORE_NAME)
-        .getAll();
-
-      request.onsuccess = () => {
-        resolve(request.result || []);
-      };
-
-      request.onerror = () => {
-        reject(
-          request.error ||
-            new Error("Could not retrieve saved medicines.")
-        );
-      };
-    });
-  } finally {
-    database.close();
-  }
-}
-
-async function updatePrescription(updatedPrescription) {
-  const database = await openPrescriptionDatabase();
-
-  try {
-    await new Promise((resolve, reject) => {
-      const transaction = database.transaction(
-        STORE_NAME,
-        "readwrite"
-      );
-
-      transaction.objectStore(STORE_NAME).put(updatedPrescription);
-
-      transaction.oncomplete = () => resolve();
-
-      transaction.onerror = () => {
-        reject(
-          transaction.error ||
-            new Error("Could not save the medicine image.")
-        );
-      };
-
-      transaction.onabort = () => {
-        reject(
-          transaction.error ||
-            new Error("Saving the medicine image was cancelled.")
-        );
-      };
-    });
-  } finally {
-    database.close();
-  }
-}
-
-async function deletePrescription(prescriptionId) {
-  const database = await openPrescriptionDatabase();
-
-  try {
-    await new Promise((resolve, reject) => {
-      const transaction = database.transaction(
-        STORE_NAME,
-        "readwrite"
-      );
-
-      transaction.objectStore(STORE_NAME).delete(prescriptionId);
-
-      transaction.oncomplete = () => resolve();
-
-      transaction.onerror = () => {
-        reject(
-          transaction.error ||
-            new Error("Could not delete the prescription.")
-        );
-      };
-
-      transaction.onabort = () => {
-        reject(
-          transaction.error ||
-            new Error("Deleting the prescription was cancelled.")
-        );
-      };
-    });
-  } finally {
-    database.close();
-  }
-}
+import React, { useEffect, useState } from "react";
+import { getAllMedicines, deleteMedicine } from "../database/medicineDB";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+import { syncReminderSchedules } from "../utils/reminderSync";
 
 function MyMedicines() {
-  const [prescriptions, setPrescriptions] = useState([]);
+  const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [deletingId, setDeletingId] = useState(null);
-  const [uploadingMedicineId, setUploadingMedicineId] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
 
-  const loadPrescriptions = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const savedPrescriptions = await getSavedPrescriptions();
-
-      savedPrescriptions.sort(
-        (a, b) =>
-          new Date(b.createdAt || 0) -
-          new Date(a.createdAt || 0)
-      );
-
-      setPrescriptions(savedPrescriptions);
-    } catch (err) {
-      console.error("Loading medicines failed:", err);
-
-      setError(
-        err.message ||
-          "Unable to load medicines stored on this device."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    loadPrescriptions();
-  }, [loadPrescriptions]);
+    const loadMedicines = async () => {
+      try {
+        const savedMedicines = await getAllMedicines();
+        console.log(
+  "Medicines loaded from IndexedDB:",
+  savedMedicines.map((medicine) => ({
+    name: medicine.medicineName,
+    hasImage: !!medicine.medicineImage,
+    imageType: medicine.medicineImage?.constructor?.name,
+  }))
+);
+        setMedicines(savedMedicines);
+      } catch (error) {
+        console.error("Error loading medicines:", error);
+        toast.error("Unable to load medicines.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleMedicineImageUpload = async (
-    prescription,
-    medicine,
-    event
-  ) => {
-    const file = event.target.files?.[0];
+    loadMedicines();
+  }, []);
 
-    // Allow the same image to be selected again later.
-    event.target.value = "";
+  
+const handleDelete = async (id) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this medicine?"
+  );
 
-    if (!file) {
-      return;
-    }
+  if (!confirmed) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid medicine image.");
-      setSuccess("");
-      return;
-    }
+  try {
+    // Delete medicine from IndexedDB
+    await deleteMedicine(id);
 
-    if (file.size > MAX_IMAGE_SIZE) {
-      setError("Please select an image smaller than 10 MB.");
-      setSuccess("");
-      return;
-    }
-
-    const medicineId =
-      medicine.id || medicine.medicineName;
-
-    setUploadingMedicineId(medicineId);
-    setError("");
-    setSuccess("");
-
-    try {
-      const updatedMedicines = prescription.medicines.map(
-        (item) => {
-          const itemId = item.id || item.medicineName;
-
-          if (itemId !== medicineId) {
-            return item;
-          }
-
-          return {
-            ...item,
-            medicineImageBlob: file,
-            medicineImageName: file.name,
-            medicineImageType: file.type,
-          };
-        }
-      );
-
-      const updatedPrescription = {
-        ...prescription,
-        medicines: updatedMedicines,
-      };
-
-      await updatePrescription(updatedPrescription);
-
-      setPrescriptions((previous) =>
-        previous.map((item) =>
-          item.id === prescription.id
-            ? updatedPrescription
-            : item
-        )
-      );
-
-      setSuccess(
-        `Image saved for ${medicine.medicineName || "the medicine"}.`
-      );
-    } catch (err) {
-      console.error("Saving medicine image failed:", err);
-
-      setError(
-        err.message || "Could not save the medicine image."
-      );
-    } finally {
-      setUploadingMedicineId(null);
-    }
-  };
-
-  const handleDelete = async (prescription) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this prescription and its saved medicine details?"
+    // Update the medicine list on screen
+    setMedicines((previousMedicines) =>
+      previousMedicines.filter((medicine) => medicine.id !== id)
     );
 
-    if (!confirmed) {
-      return;
+    // Sync remaining medicine reminder slots with backend
+    if (localStorage.getItem("remindersEnabled") === "true") {
+      await syncReminderSchedules();
     }
 
-    setDeletingId(prescription.id);
-    setError("");
-    setSuccess("");
+    toast.success("Medicine deleted successfully!");
+  } catch (error) {
+    console.error("Error deleting medicine:", error);
+    toast.error("Unable to delete medicine.");
+  }
+};
 
-    try {
-      await deletePrescription(prescription.id);
-
-      setPrescriptions((previous) =>
-        previous.filter((item) => item.id !== prescription.id)
-      );
-
-      setSuccess("Prescription deleted successfully.");
-    } catch (err) {
-      console.error("Deleting prescription failed:", err);
-
-      setError(
-        err.message || "Could not delete this prescription."
-      );
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   return (
-    <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-        <h2 className="fw-bold mb-0">My Medicines</h2>
+    <div className="container-fluid px-3 px-md-4 py-4 pb-5">
+      {/* Page Header */}
+      {/* <div className="mb-4">
+        <h2 className="fw-bold mb-2">My Medicines</h2>
+        <p className="text-secondary mb-0">
+          View and manage your saved medicines
+        </p>
+      </div> */}
 
-        <button
-          type="button"
-          className="btn btn-outline-primary"
-          onClick={loadPrescriptions}
-          disabled={loading}
-        >
-          {loading ? "Loading..." : "Refresh"}
-        </button>
+      {/* Total Medicines */}
+      <div className="card border-0 shadow-sm rounded-4 mb-4">
+        <div className="card-body p-3 d-flex align-items-center gap-3">
+          <div
+            className="rounded-3 p-3"
+            style={{ backgroundColor: "#e8f0ff" }}
+          >
+            <span
+              className="fs-3"
+              role="img"
+              aria-label="Medicine"
+            >
+              💊
+            </span>
+          </div>
+
+          <div>
+            <p className="text-secondary mb-1">
+              Total Medicines
+            </p>
+            <h3 className="fw-bold mb-0">
+              {medicines.length}
+            </h3>
+          </div>
+        </div>
       </div>
 
-      <p className="text-muted mb-4">
-        View your saved prescriptions, medicine details, and
-        individual medicine photos. Your information is stored
-        locally on this device.
-      </p>
-
-      {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success" role="status">
-          {success}
-        </div>
-      )}
-
+      {/* Loading State */}
       {loading && (
-        <div className="text-center py-5" role="status">
+        <div className="text-center py-5">
           <div
-            className="spinner-border text-primary mb-3"
-            aria-hidden="true"
-          />
-
-          <p className="text-muted mb-0">
+            className="spinner-border text-primary"
+            role="status"
+          >
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="text-secondary mt-2">
             Loading your medicines...
           </p>
         </div>
       )}
 
-      {!loading && !error && prescriptions.length === 0 && (
-        <div className="card border-0 shadow-sm">
+      {/* Empty State */}
+      {!loading && medicines.length === 0 && (
+        <div className="card border-0 shadow-sm rounded-4">
           <div className="card-body text-center py-5">
-            <div className="display-5 mb-3" aria-hidden="true">
-              💊
-            </div>
-
-            <h4 className="fw-bold">
-              No saved medicines yet
-            </h4>
-
-            <p className="text-muted mb-0">
-              Upload a prescription, analyze it, review the
-              medicine details, and select Save Prescription.
+            <div className="fs-1 mb-3">💊</div>
+            <h5 className="fw-bold">No medicines added yet</h5>
+            <p className="text-secondary mb-0">
+              Your saved medicines will appear here.
             </p>
           </div>
         </div>
       )}
 
-      {!loading &&
-        prescriptions.map((prescription) => (
-          <div
-            key={prescription.id}
-            className="card border-0 shadow-sm mb-4"
-          >
-            <div className="card-body p-3 p-md-4">
-              <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
-                <div>
-                  <h5 className="fw-bold mb-1">
-                    Saved Prescription
-                  </h5>
+      {/* Medicine Cards */}
+      {!loading && medicines.length > 0 && (
+        <div className="row g-3">
+          {medicines.map((medicine) => (
+            
+            <div className="col-12 col-md-6" key={medicine.id}>
+              <div className="card border-0 shadow-sm rounded-4 h-100">
+                <div className="card-body p-3">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <h5 className="fw-bold mb-0">
+                      {medicine.medicineName}
+                    </h5>
 
-                  <p className="text-muted small mb-1">
-                    {prescription.imageName ||
-                      "Prescription image"}
+                    <div className="dropdown position-relative">
+                      <button
+                        type="button"
+                        className="btn border-0 p-1 rounded-circle"
+                        aria-label="Medicine options"
+                        onClick={() =>
+                          setOpenMenuId(
+                            openMenuId === medicine.id ? null : medicine.id
+                          )
+                        }
+                      >
+                        <i className="bi bi-three-dots-vertical fs-5"></i>
+                      </button>
+
+                      {openMenuId === medicine.id && (
+                        <div
+                          className="dropdown-menu show end-0"
+                          style={{
+                            position: "absolute",
+                            left: "auto",
+                            top: "100%",
+                            minWidth: "130px",
+                            zIndex: 10,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate("/add-manually", {
+                                state: { medicineId: medicine.id },
+                              });
+                            }}
+                          >
+                            <i className="bi bi-pencil me-2"></i>
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="dropdown-item text-danger"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              handleDelete(medicine.id);
+                            }}
+                          >
+                            <i className="bi bi-trash me-2"></i>
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="d-flex gap-3 align-items-start">
+                  <MedicineImage
+  imageBlob={medicine.medicineImage}
+  imageName={medicine.medicineName}
+/>
+
+                    <div className="flex-grow-1">
+                      <p className=" mb-1">
+                        {/* {medicine.strength} · {medicine.medicineType} */}
+                        {medicine.purpose}
+                      </p>
+
+                      <p className="mb-1">
+                        <strong>Dose:</strong> {medicine.dose} unit(s)
+                      </p>
+
+                      <p className="mb-1">
+                        <strong>Frequency:</strong> {medicine.frequency} time(s) a day
+                      </p>
+
+                      <p className="mb-1">
+                        <strong>Time:</strong>{" "}
+                        {Array.isArray(medicine.timesOfDay)
+                          ? medicine.timesOfDay
+                              .map((time) => {
+                                const value = time?.toLowerCase().trim();
+
+                                if (value.includes("morning") || value.includes("breakfast"))
+                                  return "Morning";
+
+                                if (value.includes("afternoon") || value.includes("lunch"))
+                                  return "Afternoon";
+
+                                if (value.includes("night") || value.includes("dinner"))
+                                  return "Night";
+
+                                return time;
+                              })
+                              .join(", ")
+                          : medicine.timesOfDay}
+                      </p>
+
+                      <p className="mb-0">
+                        <strong>Food:</strong> {medicine.foodInstruction}
+                      </p>
+                    </div>
+                  </div>
+
+                  <hr />
+
+                  <p className="mb-1">
+                    <strong>Start date:</strong>{" "}
+                    {medicine.startDate || "Not specified"}
                   </p>
 
-                  <p className="text-muted small mb-0">
-                    Saved on:{" "}
-                    {prescription.createdAt
-                      ? new Date(
-                          prescription.createdAt
-                        ).toLocaleString()
-                      : "Date unavailable"}
+                  <p className="mb-0">
+                    <strong>Duration:</strong>{" "}
+                    {medicine.duration} {medicine.durationUnit}
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  className="btn btn-outline-danger btn-sm"
-                  onClick={() => handleDelete(prescription)}
-                  disabled={deletingId === prescription.id}
-                >
-                  {deletingId === prescription.id
-                    ? "Deleting..."
-                    : "Delete"}
-                </button>
-              </div>
-
-              {prescription.imageBlob && (
-                <details className="mb-3">
-                  <summary className="text-primary">
-                    View original prescription
-                  </summary>
-
-                  <PrescriptionImage
-                    imageBlob={prescription.imageBlob}
-                    imageName={prescription.imageName}
-                  />
-                </details>
-              )}
-
-              <hr />
-
-              <h6 className="fw-bold mb-3">
-                Medicines ({prescription.medicines?.length || 0})
-              </h6>
-
-              {prescription.medicines?.length > 0 ? (
-                prescription.medicines.map((medicine, index) => {
-                  const medicineId =
-                    medicine.id || medicine.medicineName;
-
-                  return (
-                    <div
-                      key={`${prescription.id}-${medicineId}-${index}`}
-                      className="border rounded-3 p-3 mb-3"
-                    >
-                      <h6 className="fw-bold mb-3">
-                        {index + 1}.{" "}
-                        {medicine.medicineName ||
-                          "Unnamed medicine"}
-                      </h6>
-
-                      <MedicineImage
-                        imageBlob={medicine.medicineImageBlob}
-                        imageName={medicine.medicineImageName}
-                      />
-
-                      <div className="mb-3">
-                        <label
-                          className="form-label fw-semibold"
-                          htmlFor={`medicine-image-${prescription.id}-${index}`}
-                        >
-                          Upload medicine photo
-                        </label>
-
-                        <input
-                          id={`medicine-image-${prescription.id}-${index}`}
-                          type="file"
-                          className="form-control"
-                          accept="image/*"
-                          capture="environment"
-                          disabled={
-                            uploadingMedicineId === medicineId
-                          }
-                          onChange={(event) =>
-                            handleMedicineImageUpload(
-                              prescription,
-                              medicine,
-                              event
-                            )
-                          }
-                        />
-
-                        <small className="text-muted d-block mt-1">
-                          Choose a clear photo of the actual medicine
-                          or its packaging. Maximum size: 10 MB.
-                        </small>
-
-                        {uploadingMedicineId === medicineId && (
-                          <small
-                            className="text-primary d-block mt-2"
-                            role="status"
-                          >
-                            Saving medicine photo...
-                          </small>
-                        )}
-                      </div>
-
-                      <div className="row g-3">
-                        <MedicineDetail
-                          label="Strength"
-                          value={medicine.strength}
-                        />
-
-                        <MedicineDetail
-                          label="Dosage"
-                          value={medicine.dosage}
-                        />
-
-                        <MedicineDetail
-                          label="Frequency"
-                          value={medicine.frequency}
-                        />
-
-                        <MedicineDetail
-                          label="Duration"
-                          value={medicine.duration}
-                        />
-
-                        <MedicineDetail
-                          label="Instructions"
-                          value={medicine.instructions}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-muted mb-0">
-                  No medicine details were saved for this prescription.
-                </p>
-              )}
-
-              <div className="alert alert-info small mb-0 mt-3">
-                Saving a prescription does not activate medicine
-                reminders. Follow the verified instructions from
-                your healthcare professional.
               </div>
             </div>
-          </div>
-        ))}
-    </div>
-  );
-}
 
-function MedicineDetail({ label, value }) {
-  return (
-    <div className="col-12 col-md-6">
-      <div className="small text-muted">{label}</div>
-
-      <div className="fw-semibold">
-        {value?.trim() || "Not provided"}
-      </div>
-    </div>
-  );
-}
-
-function PrescriptionImage({ imageBlob, imageName }) {
-  const [imageUrl, setImageUrl] = useState("");
-
-  useEffect(() => {
-    if (!imageBlob) {
-      setImageUrl("");
-      return;
-    }
-
-    const url = URL.createObjectURL(imageBlob);
-    setImageUrl(url);
-
-    return () => URL.revokeObjectURL(url);
-  }, [imageBlob]);
-
-  if (!imageUrl) {
-    return null;
-  }
-
-  return (
-    <div className="mt-3">
-      <img
-        src={imageUrl}
-        alt={imageName || "Original prescription"}
-        className="img-fluid rounded border"
-        style={{
-          maxHeight: "350px",
-          objectFit: "contain",
-        }}
-      />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
