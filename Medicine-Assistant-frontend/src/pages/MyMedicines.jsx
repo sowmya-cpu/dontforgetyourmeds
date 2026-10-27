@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from "react";
-import { getAllMedicines, deleteMedicine } from "../database/medicineDB";
+import { getMedicinesByUser, deleteMedicine } from "../database/medicineDB";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import { syncReminderSchedules } from "../utils/reminderSync";
@@ -15,7 +15,15 @@ function MyMedicines() {
   useEffect(() => {
     const loadMedicines = async () => {
       try {
-        const savedMedicines = await getAllMedicines();
+        const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+        if (!email) {
+          toast.error("Please log in again.");
+          setMedicines([]);
+          return;
+        }
+
+        const savedMedicines = await getMedicinesByUser(email);
         setMedicines(savedMedicines);
       } catch (error) {
         console.error("Error loading medicines:", error);

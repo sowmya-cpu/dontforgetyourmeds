@@ -37,6 +37,13 @@ function AddManually() {
       const loadMedicine = async () => {
         try {
           const medicine = await getMedicineById(medicineId);
+          const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+          if (!email || medicine?.userEmail?.trim().toLowerCase() !== email) {
+            toast.error("You cannot edit this medicine.");
+            navigate("/medicines");
+            return;
+          }
 
           if (!medicine) {
             toast.error("Medicine not found.");
@@ -127,6 +134,12 @@ function AddManually() {
       toast.error("Please upload a medicine image");
       return;
     }
+    const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+    if (!email) {
+      toast.error("Please log in again.");
+      return;
+    }
 
     const medicineData = {
       medicineName: medicineName.trim(),
@@ -141,6 +154,7 @@ function AddManually() {
       duration: Number(duration),
       durationUnit,
       medicineImage,
+      userEmail: email,
     };
 
     try {

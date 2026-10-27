@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import {
-  getAllMedicines,
+  getMedicinesByUser,
   getDoseHistoryForDate,
   markDoseAsTaken,
 } from "../database/medicineDB";
@@ -31,12 +31,21 @@ function TodaysSchedule() {
 
   const loadData = useCallback(async () => {
     try {
-      const [allMedicines, doseHistory] = await Promise.all([
-        getAllMedicines(),
+      const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+      if (!email) {
+        setMedicines([]);
+        setHistory([]);
+        toast.error("Please log in again.");
+        return;
+      }
+
+      const [userMedicines, doseHistory] = await Promise.all([
+        getMedicinesByUser(email),
         getDoseHistoryForDate(today),
       ]);
 
-      setMedicines(allMedicines);
+      setMedicines(userMedicines);
       setHistory(doseHistory);
     } catch (error) {
       console.error(error);

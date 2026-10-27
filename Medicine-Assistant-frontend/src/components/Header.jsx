@@ -41,10 +41,20 @@ function Header() {
 
   const loadNotifications = async () => {
     try {
-      const pending = await getPendingNotifications();
-      setNotifications(pending.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      ));
+      const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+      if (!email) {
+        setNotifications([]);
+        return;
+      }
+
+      const pending = await getPendingNotifications(email);
+
+      setNotifications(
+        pending.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        )
+      );
     } catch (error) {
       console.error("Notification loading error:", error);
     }

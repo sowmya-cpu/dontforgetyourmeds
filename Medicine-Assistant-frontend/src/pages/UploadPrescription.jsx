@@ -596,7 +596,7 @@ function UploadPrescription() {
         id:
           currentPrescriptionId.current ||
           `prescription-${Date.now()}`,
-
+          userEmail: localStorage.getItem("email"),
         createdAt: new Date().toISOString(),
 
         imageName: file.name,
@@ -616,6 +616,11 @@ function UploadPrescription() {
       // Save the prescription in its existing prescription database
       const savedRecord = await savePrescriptionLocally(record);
 
+      const email = localStorage.getItem("email");
+
+      if (!email) {
+        throw new Error("Please log in again to save your prescription.");
+      }
       // Get existing medicines to avoid duplicates when saving again
       const existingMedicines = await getAllMedicines();
 
@@ -652,6 +657,7 @@ function UploadPrescription() {
           // can be updated instead of saved again
           prescriptionRecordId: savedRecord.id,
           prescriptionMedicineId: medicine.id,
+          userEmail: email,
         };
 
         const existingMedicine = existingMedicines.find(
