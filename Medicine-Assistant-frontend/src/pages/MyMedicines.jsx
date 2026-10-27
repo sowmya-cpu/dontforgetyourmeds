@@ -16,6 +16,14 @@ function MyMedicines() {
     const loadMedicines = async () => {
       try {
         const savedMedicines = await getAllMedicines();
+        console.log(
+  "Medicines loaded from IndexedDB:",
+  savedMedicines.map((medicine) => ({
+    name: medicine.medicineName,
+    hasImage: !!medicine.medicineImage,
+    imageType: medicine.medicineImage?.constructor?.name,
+  }))
+);
         setMedicines(savedMedicines);
       } catch (error) {
         console.error("Error loading medicines:", error);
@@ -192,19 +200,10 @@ const handleDelete = async (id) => {
                   </div>
 
                   <div className="d-flex gap-3 align-items-start">
-                    {medicine.medicineImage && (
-                      <img
-                        src={URL.createObjectURL(medicine.medicineImage)}
-                        alt={medicine.medicineName}
-                        className="rounded-3"
-                        style={{
-                          width: "90px",
-                          height: "110px",
-                          objectFit: "cover",
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
+                  <MedicineImage
+  imageBlob={medicine.medicineImage}
+  imageName={medicine.medicineName}
+/>
 
                     <div className="flex-grow-1">
                       <p className=" mb-1">
@@ -266,6 +265,48 @@ const handleDelete = async (id) => {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MedicineImage({ imageBlob, imageName }) {
+  const [imageUrl, setImageUrl] = useState("");
+
+  useEffect(() => {
+    if (!imageBlob) {
+      setImageUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(imageBlob);
+    setImageUrl(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [imageBlob]);
+
+  if (!imageUrl) {
+    return (
+      <p className="text-muted small">
+        No individual medicine photo uploaded yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mb-3">
+      <img
+        src={imageUrl}
+        alt={imageName || "Saved medicine photo"}
+        className="img-fluid rounded border"
+        style={{
+          maxHeight: "220px",
+          objectFit: "contain",
+        }}
+      />
+
+      <p className="text-muted small mt-1 mb-0">
+        {imageName || "Saved medicine photo"}
+      </p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ target/
 data/
 *.mv.db
 *.trace.db
-
+.env 
 # IDE
 .classpath
 .project

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createWorker } from "tesseract.js";
+
 import {
   saveMedicine,
   getAllMedicines,
-  updateMedicine,
+    updateMedicine as updateMedicineRecord,
+   getMedicineById,
 } from "../database/medicineDB";
 
 const API_URL = "http://localhost:8080/api/prescription-ai/analyze";
@@ -65,6 +67,67 @@ async function calculateImageHash(blob) {
 }
 
 /* =========================================================
+   EXTRACT PRESCRIPTION DATE FROM OCR TEXT
+   Supports common formats: DD/MM/YYYY, DD-MM-YYYY,
+   DD.MM.YYYY, and YYYY-MM-DD.
+========================================================= */
+
+function extractPrescriptionDate(ocrText) {
+  if (!ocrText) return "";
+
+  const text = ocrText.replace(/\s+/g, " ");
+
+  // Prefer dates near a prescription/date label when present.
+  const labelledDateMatch = text.match(
+    /(?:prescription\s*date|date|dated)\s*[:\-]?\s*(\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4})/i
+  );
+
+  const generalDateMatch =
+    labelledDateMatch ||
+    text.match(/\b(\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4})\b/);
+
+  if (!generalDateMatch) return "";
+
+  const rawDate = generalDateMatch[1];
+  const parts = rawDate.split(/[\/.-]/).map(Number);
+
+  let year;
+  let month;
+  let day;
+
+  if (parts[0] > 999) {
+    // YYYY-MM-DD
+    [year, month, day] = parts;
+  } else {
+    // Assume common Indian prescription format DD/MM/YYYY.
+    [day, month, year] = parts;
+
+    // Handle two-digit years conservatively.
+    if (year < 100) {
+      year += year >= 50 ? 1900 : 2000;
+    }
+  }
+
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+  // Reject invalid dates rather than silently changing them.
+  if (
+    !Number.isInteger(year) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    return "";
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/* =========================================================
    SAVE PRESCRIPTION WITHOUT DUPLICATING THE SAME IMAGE
 
    1. Calculate the image fingerprint.
@@ -74,7 +137,7 @@ async function calculateImageHash(blob) {
    5. Save the latest reviewed medicine details.
 ========================================================= */
 
-async function savePrescriptionLocally(record) {
+async function savePrescriptionLocally(record, validateBeforeSave) {
   if (!("indexedDB" in window)) {
     throw new Error(
       "This browser does not support local prescription storage."
@@ -143,6 +206,8 @@ async function savePrescriptionLocally(record) {
         : record.createdAt,
     };
 
+    await validateBeforeSave(recordToSave);
+
     // Update the existing record and remove duplicates atomically.
     await new Promise((resolve, reject) => {
       const transaction = database.transaction(
@@ -207,7 +272,7 @@ function parseGeminiResponse(result) {
 
   return parsed.medicines.map((medicine, index) => {
     const normalized = {
-      id: `medicine-${Date.now()}-${index}`,
+      id: `prescription-medicine-${index}`,
       medicineName: String(medicine.medicineName ?? ""),
       strength: String(medicine.strength ?? ""),
       dosage: String(medicine.dosage ?? ""),
@@ -251,11 +316,14 @@ function parseGeminiResponse(result) {
 ========================================================= */
 
 function UploadPrescription() {
+ 
   const navigate = useNavigate();
 
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [medicines, setMedicines] = useState([]);
+  const [prescriptionStartDate, setPrescriptionStartDate] = useState("");
+  const prescriptionStartDateRef = useRef("");
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -291,6 +359,8 @@ function UploadPrescription() {
     setError("");
     setSuccess("");
     setMedicines([]);
+    setPrescriptionStartDate("");
+    prescriptionStartDateRef.current = "";
     setProgress(0);
     setHasConfirmedReview(false);
 
@@ -326,9 +396,7 @@ function UploadPrescription() {
 
     setFile(selectedFile);
     setPreview(URL.createObjectURL(selectedFile));
-  };
-
-  /* =======================================================
+  };  /* =======================================================
      OCR + GEMINI ANALYSIS
   ======================================================= */
 
@@ -346,6 +414,8 @@ function UploadPrescription() {
     setError("");
     setSuccess("");
     setMedicines([]);
+    setPrescriptionStartDate("");
+    prescriptionStartDateRef.current = "";
     setHasConfirmedReview(false);
     setProgress(0);
 
@@ -367,6 +437,14 @@ function UploadPrescription() {
 
       const ocrResult = await worker.recognize(file);
       const ocrText = ocrResult.data.text.trim();
+
+      // Extract the prescription date from OCR text.
+      const extractedPrescriptionDate =
+        extractPrescriptionDate(ocrText);
+
+      setPrescriptionStartDate(extractedPrescriptionDate);
+      prescriptionStartDateRef.current =
+        extractedPrescriptionDate;
 
       if (!ocrText) {
         throw new Error(
@@ -529,6 +607,33 @@ function UploadPrescription() {
      SAVE PRESCRIPTION
   ======================================================= */
 
+  const handleMedicineImageChange = (medicineId, event) => {
+  const image = event.target.files?.[0];
+
+  if (!image) return;
+
+  if (!image.type.startsWith("image/")) {
+    setError("Please select a valid medicine image.");
+    event.target.value = "";
+    return;
+  }
+
+  if (image.size > MAX_IMAGE_SIZE) {
+    setError("Medicine image must be smaller than 10 MB.");
+    event.target.value = "";
+    return;
+  }
+
+  setMedicines((previous) =>
+    previous.map((medicine) =>
+      medicine.id === medicineId
+        ? { ...medicine, medicineImage: image }
+        : medicine
+    )
+  );
+
+  setError("");
+};
   const handleSavePrescription = async () => {
     // Immediately block repeated clicks.
     if (saveLock.current) {
@@ -585,7 +690,6 @@ function UploadPrescription() {
           `Complete the required fields for Medicine ${incompleteIndex + 1}: ${missingFields.join(", ")}.`
         );
       }
-
       if (!hasConfirmedReview) {
         throw new Error(
           "Please confirm that you checked the medicine details against the original prescription."
@@ -613,61 +717,127 @@ function UploadPrescription() {
 
       // This function checks existing records by image fingerprint.
       // It updates an existing prescription instead of adding a duplicate.
-      // Save the prescription in its existing prescription database
-      const savedRecord = await savePrescriptionLocally(record);
+      // Check existing medicines before saving the prescription so an
+      // existing image can be retained when no replacement is selected.
+      let existingMedicines;
+      const savedRecord = await savePrescriptionLocally(
+        record,
+        async (candidateRecord) => {
+          existingMedicines = await getAllMedicines();
 
-      // Get existing medicines to avoid duplicates when saving again
-      const existingMedicines = await getAllMedicines();
+          const medicineWithoutImage = record.medicines.findIndex(
+            (medicine) => {
+              const existingMedicine = existingMedicines.find(
+                (item) =>
+                  item.prescriptionRecordId === candidateRecord.id &&
+                  (
+                    item.prescriptionMedicineId === medicine.id ||
+                    item.medicineName?.trim().toLowerCase() ===
+                      medicine.medicineName?.trim().toLowerCase()
+                  )
+              );
+
+              return (
+                !medicine.medicineImage &&
+                !existingMedicine?.medicineImage
+              );
+            }
+          );
+
+          if (medicineWithoutImage !== -1) {
+            throw new Error(
+              `Please upload an image for Medicine ${medicineWithoutImage + 1}.`
+            );
+          }
+        }
+      );
 
       for (const medicine of record.medicines) {
         const durationMatch = String(medicine.duration).match(
           /^\s*(\d+)\s*(.*)\s*$/
+        );
+              console.log(
+  "Image before saving:",
+  medicine.medicineName,
+  medicine.medicineImage
+);
+        const existingMedicine = existingMedicines.find(
+          (item) =>
+            item.prescriptionRecordId === savedRecord.id &&
+            (
+              item.prescriptionMedicineId === medicine.id ||
+              item.medicineName?.trim().toLowerCase() ===
+                medicine.medicineName?.trim().toLowerCase()
+            )
         );
 
         const medicineData = {
           medicineName: medicine.medicineName,
           strength: medicine.strength,
 
-          // Map prescription data to medicineDB fields
+          // Map prescription data to medicineDB fields.
           dose: medicine.dosage,
           frequency: medicine.frequency,
           foodInstruction: medicine.foodInstruction || "After food",
 
-          // These fields are not collected in your prescription form
           purpose: "",
           timesOfDay: medicine.timesOfDay?.length
-                    ? medicine.timesOfDay
-                    : medicine.instructions
-                      ? [medicine.instructions]
-                      : [],
-          startDate: "",
+            ? medicine.timesOfDay
+            : medicine.instructions
+              ? [medicine.instructions]
+              : [],
+
+          // Use the date extracted from the prescription.
+          startDate:
+            prescriptionStartDate,
+
           duration: durationMatch
             ? durationMatch[1]
             : medicine.duration,
+
           durationUnit: durationMatch
             ? durationMatch[2].trim()
             : "",
 
-          // Track the source so the same prescription medicine
-          // can be updated instead of saved again
+          // Link the medicine to its prescription.
           prescriptionRecordId: savedRecord.id,
           prescriptionMedicineId: medicine.id,
+          medicineImage:
+            medicine.medicineImage ?? existingMedicine?.medicineImage,
         };
 
-        const existingMedicine = existingMedicines.find(
-          (item) =>
-            item.prescriptionRecordId === savedRecord.id &&
-            item.prescriptionMedicineId === medicine.id
-        );
+    let savedMedicine;
 
-        if (existingMedicine) {
-          await updateMedicine({
-            ...existingMedicine,
-            ...medicineData,
-          });
-        } else {
-          await saveMedicine(medicineData);
-        }
+if (existingMedicine) {
+  console.log("Old image:", existingMedicine.medicineImage);
+  console.log("New image:", medicineData.medicineImage);
+
+  await updateMedicineRecord({
+    ...existingMedicine,
+    ...medicineData,
+  });
+
+  const updatedMedicine = await getMedicineById(existingMedicine.id);
+
+  console.log("Image after update:", updatedMedicine.medicineImage);
+}else {
+  const newId = await saveMedicine(medicineData);
+const savedCheck = await getAllMedicines();
+
+console.log(
+  "Image in IndexedDB after save:",
+  savedCheck.find(
+    (item) =>
+      item.prescriptionRecordId === savedRecord.id &&
+      item.prescriptionMedicineId === medicine.id
+  )?.medicineImage
+);
+  savedMedicine = {
+    ...medicineData,
+    id: newId,
+  };
+}
+
       }
 
       currentPrescriptionId.current = savedRecord.id;
@@ -688,9 +858,7 @@ function UploadPrescription() {
       saveLock.current = false;
       setSaving(false);
     }
-  };
-
-  /* =======================================================
+  };  /* =======================================================
      UI
   ======================================================= */
 
@@ -819,7 +987,28 @@ function UploadPrescription() {
             <p className="text-muted">
               Please compare every field with the original prescription before saving.
             </p>
+              <div className="mb-4">
+  <label htmlFor="prescription-start-date" className="form-label fw-bold">
+    Prescription Start Date
+  </label>
 
+  <input
+    id="prescription-start-date"
+    type="date"
+    className="form-control"
+    value={prescriptionStartDate}
+    onChange={(event) => {
+      setPrescriptionStartDate(event.target.value);
+      prescriptionStartDateRef.current = event.target.value;
+    }}
+    disabled={saving}
+    required
+  />
+
+  <small className="text-muted">
+    Please verify the detected date or enter the correct date manually.
+  </small>
+</div>
             <div
               className="alert alert-warning"
               role="alert"
@@ -907,6 +1096,51 @@ function UploadPrescription() {
                     />
                   </div>
                 ))}
+                <div className="mb-3">
+  <label
+    htmlFor={`${medicine.id}-image`}
+    className="form-label fw-bold"
+  >
+    Medicine Image <span className="text-danger">*</span>
+  </label>
+
+  <input
+    id={`${medicine.id}-image`}
+    type="file"
+    className="form-control"
+    accept="image/*"
+    onChange={(event) =>
+      handleMedicineImageChange(medicine.id, event)
+    }
+    disabled={saving}
+    required
+  />
+
+  {!medicine.medicineImage && (
+    <small className="text-danger">
+      Please upload an image for this medicine.
+    </small>
+  )}
+
+  {medicine.medicineImage && (
+    <div className="mt-2">
+      <img
+        src={URL.createObjectURL(medicine.medicineImage)}
+        alt={medicine.medicineName}
+        className="rounded border"
+        style={{
+          width: "100px",
+          height: "100px",
+          objectFit: "contain",
+        }}
+      />
+
+      <p className="text-success small mt-1">
+        Image selected
+      </p>
+    </div>
+  )}
+</div>
               </div>
             ))}
 
