@@ -321,7 +321,7 @@ function MedicineCard({ medicine, scheduleInfo }) {
 function AskAssistant() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-
+ 
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -401,6 +401,10 @@ function AskAssistant() {
 
     setMessages((previous) => [
       ...previous,
+      {
+        role: "user",
+        text: userQuestion,
+      },
       {
         role: "user",
         text: userQuestion,
@@ -666,6 +670,7 @@ function AskAssistant() {
         {
           role: "assistant",
           text: errorMessage,
+          text: errorMessage,
         },
       ]);
     } finally {
@@ -835,5 +840,5 @@ function AskAssistant() {
     </div>
   );
 }
-
+ 
 export default AskAssistant;

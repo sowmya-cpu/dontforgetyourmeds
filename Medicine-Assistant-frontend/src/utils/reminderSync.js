@@ -1,7 +1,8 @@
 
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { getAllMedicines } from "../database/medicineDB";
+import { getMedicinesByUser } from "../database/medicineDB";
+import { toast } from "react-toastify";
 
 const API_URL = "http://localhost:8080/api/reminders/sync";
 
@@ -192,9 +193,34 @@ async function syncAndroidNotifications(medicines) {
   );
 }
 
+function normalizeReminderSlot(slot) {
+  const value = slot?.toLowerCase().trim();
+
+  if (value.includes("morning") || value.includes("breakfast")) {
+    return "Morning";
+  }
+
+  if (value.includes("afternoon") || value.includes("lunch")) {
+    return "Afternoon";
+  }
+
+  if (value.includes("night") || value.includes("dinner")) {
+    return "Night";
+  }
+
+  return slot;
+}
+
 // Main reminder sync function
 export async function syncReminderSchedules() {
-  const medicines = await getAllMedicines();
+  const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+  if (!email) {
+    toast.error("Please log in again.");
+    return;
+  }
+
+  const medicines = await getMedicinesByUser(email);
 
   const remindersEnabled =
     localStorage.getItem("remindersEnabled") === "true";
@@ -204,14 +230,18 @@ export async function syncReminderSchedules() {
 
   // Keep existing desktop backend sync
   const activeSlots = remindersEnabled
-    ? [
-        ...new Set(
-          medicines.flatMap(
-            (medicine) => medicine.timesOfDay || []
-          )
-        ),
-      ]
-    : [];
+  ? [
+      ...new Set(
+        medicines.flatMap((medicine) =>
+          (medicine.timesOfDay || [])
+            .map(normalizeReminderSlot)
+            .filter((slot) =>
+              ["Morning", "Afternoon", "Night"].includes(slot)
+            )
+        )
+      ),
+    ]
+  : [];
 
   const token = localStorage.getItem("token");
 

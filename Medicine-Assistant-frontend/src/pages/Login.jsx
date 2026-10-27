@@ -54,6 +54,7 @@ function Login() {
       }
 
       localStorage.setItem("token", result);
+      localStorage.setItem("email", email.trim().toLowerCase());
       setToken(result);
 
       const status = await checkPasskeyStatus(result);

@@ -38,9 +38,16 @@ function AddManually() {
   useEffect(() => {
     if (!isEditing) return;
 
-    const loadMedicine = async () => {
-      try {
-        const medicine = await getMedicineById(medicineId);
+      const loadMedicine = async () => {
+        try {
+          const medicine = await getMedicineById(medicineId);
+          const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+          if (!email || medicine?.userEmail?.trim().toLowerCase() !== email) {
+            toast.error("You cannot edit this medicine.");
+            navigate("/medicines");
+            return;
+          }
 
         if (!medicine) {
           toast.error("Medicine not found.");
@@ -134,6 +141,32 @@ function AddManually() {
     if (isSaving) return;
 
     setIsSaving(true);
+    if (!medicineImage) {
+      toast.error("Please upload a medicine image");
+      return;
+    }
+    const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+    if (!email) {
+      toast.error("Please log in again.");
+      return;
+    }
+
+    const medicineData = {
+      medicineName: medicineName.trim(),
+      strength: strength.trim(),
+      medicineType,
+      dose: Number(dose),
+      frequency: Number(frequency),
+      timesOfDay,
+      foodInstruction,
+      purpose:purpose === "Other"? customPurpose.trim() : purpose,
+      startDate,
+      duration: Number(duration),
+      durationUnit,
+      medicineImage,
+      userEmail: email,
+    };
 
     try {
       const medicineData = {

@@ -700,7 +700,7 @@ function UploadPrescription() {
         id:
           currentPrescriptionId.current ||
           `prescription-${Date.now()}`,
-
+          userEmail: localStorage.getItem("email"),
         createdAt: new Date().toISOString(),
 
         imageName: file.name,
@@ -804,6 +804,7 @@ function UploadPrescription() {
           prescriptionMedicineId: medicine.id,
           medicineImage:
             medicine.medicineImage ?? existingMedicine?.medicineImage,
+          userEmail: email,
         };
 
     let savedMedicine;
