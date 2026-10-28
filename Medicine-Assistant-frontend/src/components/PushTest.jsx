@@ -19,7 +19,7 @@ export default function PushTest() {
       }
 
       const response = await fetch(
-        "http://localhost:8080/api/push/subscribe",
+        "https://dontforgetyourmeds.onrender.com/api/push/subscribe",
         {
           method: "POST",
           headers: {
@@ -60,7 +60,7 @@ export default function PushTest() {
       }
 
       const response = await fetch(
-        "http://localhost:8080/api/push/send-test",
+        "https://dontforgetyourmeds.onrender.com/api/push/send-test",
         {
           method: "POST",
           headers: {

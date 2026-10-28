@@ -33,7 +33,7 @@ function Profile() {
 
       try {
         const response = await fetch(
-          "http://localhost:8080/api/auth/profile",
+          "https://dontforgetyourmeds.onrender.com/api/auth/profile",
           {
             method: "GET",
             headers: {
@@ -139,7 +139,7 @@ function Profile() {
       const subscription = await subscribeToPush();
 
       const response = await fetch(
-        "http://localhost:8080/api/push/subscribe",
+        "https://dontforgetyourmeds.onrender.com/api/push/subscribe",
         {
           method: "POST",
           headers: {
@@ -196,7 +196,7 @@ function Profile() {
       }
 
       const response = await fetch(
-        "http://localhost:8080/api/push/send-test",
+        "https://dontforgetyourmeds.onrender.com/api/push/send-test",
         {
           method: "POST",
           headers: {

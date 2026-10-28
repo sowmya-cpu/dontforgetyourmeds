@@ -6,7 +6,7 @@ import {
   getDoseHistoryForDate,
 } from "../database/medicineDB";
 
-const API_URL = "http://localhost:8080/api/prescription-ai/ask";
+const API_URL = "https://dontforgetyourmeds.onrender.com/api/prescription-ai/ask";
 
 const REQUEST_TIMEOUT_MS = 110000;
 const REQUEST_TIMEOUT_SECONDS = REQUEST_TIMEOUT_MS / 1000;
