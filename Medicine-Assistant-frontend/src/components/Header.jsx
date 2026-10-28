@@ -65,9 +65,31 @@ function Header() {
 
     // Refresh when the app returns to the foreground.
     const handleFocus = () => loadNotifications();
-    window.addEventListener("focus", handleFocus);
+    const handleReminderUpdate = () => loadNotifications();
+    const handleServiceWorkerMessage = (event) => {
+      if (event.data?.type === "MEDICINE_REMINDERS_UPDATED") {
+        loadNotifications();
+      }
+    };
 
-    return () => window.removeEventListener("focus", handleFocus);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("medicine-reminders-updated", handleReminderUpdate);
+    navigator.serviceWorker?.addEventListener(
+      "message",
+      handleServiceWorkerMessage
+    );
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(
+        "medicine-reminders-updated",
+        handleReminderUpdate
+      );
+      navigator.serviceWorker?.removeEventListener(
+        "message",
+        handleServiceWorkerMessage
+      );
+    };
   }, []);
 
   const handleDismiss = async (id) => {

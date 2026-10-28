@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   getMedicineById,
-  getAllMedicines,
+  getMedicinesByUser,
   saveMedicine,
   updateMedicine,
 } from "../database/medicineDB";
@@ -139,8 +139,6 @@ function AddManually() {
 
     // Prevent repeated submissions
     if (isSaving) return;
-
-    setIsSaving(true);
     if (!medicineImage) {
       toast.error("Please upload a medicine image");
       return;
@@ -151,23 +149,7 @@ function AddManually() {
       toast.error("Please log in again.");
       return;
     }
-
-    const medicineData = {
-      medicineName: medicineName.trim(),
-      strength: strength.trim(),
-      medicineType,
-      dose: Number(dose),
-      frequency: Number(frequency),
-      timesOfDay,
-      foodInstruction,
-      purpose:purpose === "Other"? customPurpose.trim() : purpose,
-      startDate,
-      duration: Number(duration),
-      durationUnit,
-      medicineImage,
-      userEmail: email,
-    };
-
+    setIsSaving(true);
     try {
       const medicineData = {
         medicineName: medicineName.trim(),
@@ -187,11 +169,12 @@ function AddManually() {
           duration.trim() === "" ? null : Number(duration),
         durationUnit: durationUnit || "",
         medicineImage: medicineImage || null,
+        userEmail: email,
       };
 
       // Prevent duplicate medicines when adding a new record
       if (!isEditing && medicineData.medicineName) {
-        const existingMedicines = await getAllMedicines();
+        const existingMedicines = await getMedicinesByUser(email);
 
         const normalizedName =
           medicineData.medicineName.toLowerCase();

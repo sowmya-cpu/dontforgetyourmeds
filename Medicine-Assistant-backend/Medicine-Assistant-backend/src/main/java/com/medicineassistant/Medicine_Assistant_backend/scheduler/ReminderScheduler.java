@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.medicineassistant.Medicine_Assistant_backend.WebPushService;
 import com.medicineassistant.Medicine_Assistant_backend.model.PushSubscriptionEntity;
 import com.medicineassistant.Medicine_Assistant_backend.model.ReminderScheduleEntity;
+import com.medicineassistant.Medicine_Assistant_backend.repository.UserRepository;
 import com.medicineassistant.Medicine_Assistant_backend.repository.PushSubscriptionRepository;
 import com.medicineassistant.Medicine_Assistant_backend.repository.ReminderScheduleRepository;
 
@@ -18,15 +19,18 @@ public class ReminderScheduler {
 
     private final ReminderScheduleRepository reminderRepository;
     private final PushSubscriptionRepository subscriptionRepository;
+    private final UserRepository userRepository;
     private final WebPushService webPushService;
 
     public ReminderScheduler(
             ReminderScheduleRepository reminderRepository,
             PushSubscriptionRepository subscriptionRepository,
+            UserRepository userRepository,
             WebPushService webPushService) {
 
         this.reminderRepository = reminderRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.userRepository = userRepository;
         this.webPushService = webPushService;
     }
 
@@ -46,19 +50,37 @@ public class ReminderScheduler {
             }
 
             Long userId = schedule.getUserId();
+            String userEmail = userRepository.findById(userId)
+                    .map(user -> user.getEmail())
+                    .orElse(null);
 
             List<PushSubscriptionEntity> subscriptions =
                     subscriptionRepository.findByUserId(userId);
 
             for (PushSubscriptionEntity subscription : subscriptions) {
                 try {
-                    webPushService.sendToSubscription(
-                            subscription,
-                            "Medicine Assistant 💊",
+                    String title = "Medicine Assistant 💊";
+                    String body =
                             "Your scheduled " +
                             schedule.getTimeOfDay().toLowerCase() +
-                            " medicine reminder is due."
-                    );
+                            " medicine reminder is due.";
+
+                    if (userEmail == null) {
+                        webPushService.sendToSubscription(
+                                subscription,
+                                title,
+                                body
+                        );
+                    } else {
+                        webPushService.sendReminderToSubscription(
+                                subscription,
+                                title,
+                                body,
+                                userEmail,
+                                schedule.getTimeOfDay(),
+                                schedule.getScheduledAt()
+                        );
+                    }
                 } catch (Exception e) {
                     System.err.println(
                             "Failed to send reminder: " + e.getMessage()

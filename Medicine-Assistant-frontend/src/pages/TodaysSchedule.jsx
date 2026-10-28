@@ -95,13 +95,18 @@ function TodaysSchedule() {
 
   const doses = activeMedicines.flatMap((medicine) => {
     const times = Array.isArray(medicine.timesOfDay)
-      ? medicine.timesOfDay
-      : [];
+    ? medicine.timesOfDay
+    : [];
 
-    return times.map((timeOfDay) => ({
+    const validTimes = times.filter((time) =>
+      ["Morning", "Afternoon", "Night"].includes(time)
+    );
+
+    return validTimes.map((timeOfDay) => ({
       medicine,
       timeOfDay,
-    }));
+    }));  
+
   });
 
   const isTaken = (medicineId, timeOfDay) =>

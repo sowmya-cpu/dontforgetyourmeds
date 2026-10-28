@@ -190,11 +190,17 @@ export async function getPendingNotifications(email) {
 
   const notifications = await db.getAll("notifications");
 
-  return notifications.filter(
-    (notification) =>
-      notification.userEmail?.trim().toLowerCase() === normalizedEmail &&
-      !notification.dismissed
-  );
+  return notifications.filter((notification) => {
+    const notificationEmail = notification.userEmail
+      ?.trim()
+      .toLowerCase();
+
+    return (
+      notificationEmail === normalizedEmail &&
+      !notification.dismissed &&
+      notification.status !== "dismissed"
+    );
+  });
 }
 
 /**
@@ -208,6 +214,7 @@ export async function dismissNotification(id) {
 
   await db.put("notifications", {
     ...notification,
+    dismissed: true,
     status: "dismissed",
     dismissedAt: new Date().toISOString(),
   });

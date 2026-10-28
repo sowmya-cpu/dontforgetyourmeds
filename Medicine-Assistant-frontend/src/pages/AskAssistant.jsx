@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
-  getAllMedicines,
+  getMedicinesByUser,
   getDoseHistoryForDate,
 } from "../database/medicineDB";
 
@@ -18,7 +18,8 @@ const SCHEDULE_SLOTS = [
 ];
 
 async function getSavedMedicines() {
-  const medicines = await getAllMedicines();
+  const email = localStorage.getItem("email")?.trim().toLowerCase();
+  const medicines = await getMedicinesByUser(email);
   return Array.isArray(medicines) ? medicines : [];
 }
 
@@ -285,7 +286,14 @@ function MedicineCard({ medicine, scheduleInfo }) {
 
       <p className="mb-1">
         <strong>Instructions:</strong>{" "}
-        {medicine.foodInstruction || "Not recorded"}
+        {[
+          medicine.foodInstruction,
+          ...(Array.isArray(medicine.timesOfDay)
+            ? medicine.timesOfDay
+            : []),
+        ]
+          .filter(Boolean)
+          .join(" — ") || "Not recorded"}
       </p>
 
       <p className="mb-1">
@@ -354,9 +362,9 @@ function AskAssistant() {
    */
   async function getTodaysSchedule() {
     const today = getToday();
-
+    const email = localStorage.getItem("email")?.trim().toLowerCase();
     const [allMedicines, history] = await Promise.all([
-      getAllMedicines(),
+      getMedicinesByUser(email),
       getDoseHistoryForDate(today),
     ]);
 
@@ -401,10 +409,6 @@ function AskAssistant() {
 
     setMessages((previous) => [
       ...previous,
-      {
-        role: "user",
-        text: userQuestion,
-      },
       {
         role: "user",
         text: userQuestion,
@@ -669,7 +673,6 @@ function AskAssistant() {
         ...previous,
         {
           role: "assistant",
-          text: errorMessage,
           text: errorMessage,
         },
       ]);
