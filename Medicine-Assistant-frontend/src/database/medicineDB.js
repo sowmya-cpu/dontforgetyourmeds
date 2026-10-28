@@ -65,6 +65,15 @@ export async function getAllMedicines() {
   return db.getAll(STORE_NAME);
 }
 
+export async function getMedicinesByUser(email) {
+  const db = await dbPromise;
+  const medicines = await db.getAll(STORE_NAME);
+
+  return medicines.filter(
+    (medicine) => medicine.userEmail === email
+  );
+}
+
 export async function getMedicineById(id) {
   const db = await dbPromise;
   return db.get(STORE_NAME, id);
@@ -78,7 +87,26 @@ export async function deleteMedicine(id) {
 
 export async function updateMedicine(medicine) {
   const db = await dbPromise;
-  await db.put(STORE_NAME, medicine);
+  const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+  if (!email) {
+    throw new Error("Please log in again.");
+  }
+
+  const existingMedicine = await db.get(STORE_NAME, medicine.id);
+
+  if (
+    !existingMedicine ||
+    existingMedicine.userEmail?.trim().toLowerCase() !== email
+  ) {
+    throw new Error("You cannot update this medicine.");
+  }
+
+  await db.put(STORE_NAME, {
+    ...existingMedicine,
+    ...medicine,
+    userEmail: email,
+  });
 }
 
 
@@ -154,13 +182,25 @@ export async function saveReminderNotification(reminder) {
 /**
  * Get notifications that have not been dismissed.
  */
-export async function getPendingNotifications() {
+export async function getPendingNotifications(email) {
   const db = await dbPromise;
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail) return [];
+
   const notifications = await db.getAll("notifications");
 
-  return notifications.filter(
-    (notification) => notification.status === "pending"
-  );
+  return notifications.filter((notification) => {
+    const notificationEmail = notification.userEmail
+      ?.trim()
+      .toLowerCase();
+
+    return (
+      notificationEmail === normalizedEmail &&
+      !notification.dismissed &&
+      notification.status !== "dismissed"
+    );
+  });
 }
 
 /**
@@ -174,6 +214,7 @@ export async function dismissNotification(id) {
 
   await db.put("notifications", {
     ...notification,
+    dismissed: true,
     status: "dismissed",
     dismissedAt: new Date().toISOString(),
   });

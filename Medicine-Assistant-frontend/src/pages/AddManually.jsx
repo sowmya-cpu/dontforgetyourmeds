@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   getMedicineById,
-  getAllMedicines,
+  getMedicinesByUser,
   saveMedicine,
   updateMedicine,
 } from "../database/medicineDB";
@@ -38,9 +38,16 @@ function AddManually() {
   useEffect(() => {
     if (!isEditing) return;
 
-    const loadMedicine = async () => {
-      try {
-        const medicine = await getMedicineById(medicineId);
+      const loadMedicine = async () => {
+        try {
+          const medicine = await getMedicineById(medicineId);
+          const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+          if (!email || medicine?.userEmail?.trim().toLowerCase() !== email) {
+            toast.error("You cannot edit this medicine.");
+            navigate("/medicines");
+            return;
+          }
 
         if (!medicine) {
           toast.error("Medicine not found.");
@@ -132,9 +139,17 @@ function AddManually() {
 
     // Prevent repeated submissions
     if (isSaving) return;
+    if (!medicineImage) {
+      toast.error("Please upload a medicine image");
+      return;
+    }
+    const email = localStorage.getItem("email")?.trim().toLowerCase();
 
+    if (!email) {
+      toast.error("Please log in again.");
+      return;
+    }
     setIsSaving(true);
-
     try {
       const medicineData = {
         medicineName: medicineName.trim(),
@@ -154,11 +169,12 @@ function AddManually() {
           duration.trim() === "" ? null : Number(duration),
         durationUnit: durationUnit || "",
         medicineImage: medicineImage || null,
+        userEmail: email,
       };
 
       // Prevent duplicate medicines when adding a new record
       if (!isEditing && medicineData.medicineName) {
-        const existingMedicines = await getAllMedicines();
+        const existingMedicines = await getMedicinesByUser(email);
 
         const normalizedName =
           medicineData.medicineName.toLowerCase();

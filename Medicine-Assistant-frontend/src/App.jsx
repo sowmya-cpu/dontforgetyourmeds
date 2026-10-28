@@ -19,11 +19,15 @@ import AddManually from "./pages/AddManually";
 import NotificationSettings from "./pages/NotificationSettings";
 import PushTest from "./components/PushTest";
 import { startReminderScheduler } from "./utils/reminderScheduler";
+import { initializeLocalReminderListeners } from "./utils/reminderSync";
 
 function App() {
   
 useEffect(() => {
     startReminderScheduler();
+    initializeLocalReminderListeners().catch((error) => {
+      console.error("Local reminder listener setup error:", error);
+    });
   }, []);
   return (
     <BrowserRouter>

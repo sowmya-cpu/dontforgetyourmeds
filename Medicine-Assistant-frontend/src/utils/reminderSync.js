@@ -1,7 +1,11 @@
 
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { getAllMedicines } from "../database/medicineDB";
+import {
+  getMedicinesByUser,
+  saveReminderNotification,
+} from "../database/medicineDB";
+import { toast } from "react-toastify";
 
 const API_URL = "http://localhost:8080/api/reminders/sync";
 
@@ -12,6 +16,52 @@ const REMINDER_TIMES = {
   Afternoon: { hour: 13, minute: 0 },
   Night: { hour: 20, minute: 0 },
 };
+
+let localNotificationListenersRegistered = false;
+
+export async function initializeLocalReminderListeners() {
+  if (
+    !Capacitor.isNativePlatform() ||
+    localNotificationListenersRegistered
+  ) {
+    return;
+  }
+
+  const handleLocalNotification = async ({ notification }) => {
+    const extra = notification.extra;
+
+    if (
+      !extra?.medicineId ||
+      !extra.medicineName ||
+      !extra.userEmail ||
+      !extra.timeOfDay ||
+      !extra.date
+    ) {
+      return;
+    }
+
+    await saveReminderDetails(extra);
+  };
+
+  await LocalNotifications.addListener(
+    "localNotificationReceived",
+    (event) => {
+      handleLocalNotification(event).catch((error) => {
+        console.error("Local reminder persistence error:", error);
+      });
+    }
+  );
+  await LocalNotifications.addListener(
+    "localNotificationActionPerformed",
+    (event) => {
+      handleLocalNotification(event).catch((error) => {
+        console.error("Local reminder persistence error:", error);
+      });
+    }
+  );
+
+  localNotificationListenersRegistered = true;
+}
 
 // Generate a stable numeric ID for each medicine, time slot, and date
 function getNotificationId(medicineId, timeOfDay, date) {
@@ -67,8 +117,10 @@ function getCourseEndDate(medicine) {
   return start;
 }
 
+
+
 // Schedule local notifications on Android/iOS
-async function syncAndroidNotifications(medicines) {
+async function syncAndroidNotifications(medicines, email) {
   if (!Capacitor.isNativePlatform()) {
     return;
   }
@@ -101,6 +153,8 @@ async function syncAndroidNotifications(medicines) {
     localStorage.setItem(STORAGE_KEY, "[]");
     throw new Error("Notification permission was not granted");
   }
+
+  await initializeLocalReminderListeners();
 
   const notifications = [];
   const now = new Date();
@@ -153,6 +207,11 @@ async function syncAndroidNotifications(medicines) {
         // Avoid scheduling a notification in the past
         if (notificationDate > now) {
           const notificationDateString = formatLocalDate(date);
+          const reminderKey =
+            `${email}-${medicine.id}-${timeOfDay}-${notificationDateString}`;
+          const message = `Time to take ${medicine.medicineName}. ${
+            medicine.foodInstruction || ""
+          }`.trim();
 
           notifications.push({
             id: getNotificationId(
@@ -167,8 +226,13 @@ async function syncAndroidNotifications(medicines) {
             },
             extra: {
               medicineId: medicine.id,
+              medicineName: medicine.medicineName,
+              userEmail: email,
               timeOfDay,
               date: notificationDateString,
+              reminderKey,
+              message,
+              scheduledAt: notificationDate.toISOString(),
             },
           });
         }
@@ -192,26 +256,69 @@ async function syncAndroidNotifications(medicines) {
   );
 }
 
+function normalizeReminderSlot(slot) {
+  const value = slot?.toLowerCase().trim();
+
+  if (value.includes("morning") || value.includes("breakfast")) {
+    return "Morning";
+  }
+
+  if (value.includes("afternoon") || value.includes("lunch")) {
+    return "Afternoon";
+  }
+
+  if (value.includes("night") || value.includes("dinner")) {
+    return "Night";
+  }
+
+  return slot;
+}
+
+async function saveReminderDetails(reminder) {
+  await saveReminderNotification({
+    reminderKey: reminder.reminderKey,
+    userEmail: reminder.userEmail.trim().toLowerCase(),
+    medicineId: reminder.medicineId,
+    medicineName: reminder.medicineName,
+    timeOfDay: reminder.timeOfDay,
+    message: reminder.message,
+    scheduledAt: reminder.scheduledAt,
+  });
+
+  window.dispatchEvent(new Event("medicine-reminders-updated"));
+}
+
 // Main reminder sync function
 export async function syncReminderSchedules() {
-  const medicines = await getAllMedicines();
+  const email = localStorage.getItem("email")?.trim().toLowerCase();
+
+  if (!email) {
+    toast.error("Please log in again.");
+    return;
+  }
+
+  const medicines = await getMedicinesByUser(email);
 
   const remindersEnabled =
     localStorage.getItem("remindersEnabled") === "true";
 
   // Handle local phone notifications
-  await syncAndroidNotifications(medicines);
+  await syncAndroidNotifications(medicines, email);
 
   // Keep existing desktop backend sync
   const activeSlots = remindersEnabled
-    ? [
-        ...new Set(
-          medicines.flatMap(
-            (medicine) => medicine.timesOfDay || []
-          )
-        ),
-      ]
-    : [];
+  ? [
+      ...new Set(
+        medicines.flatMap((medicine) =>
+          (medicine.timesOfDay || [])
+            .map(normalizeReminderSlot)
+            .filter((slot) =>
+              ["Morning", "Afternoon", "Night"].includes(slot)
+            )
+        )
+      ),
+    ]
+  : [];
 
   const token = localStorage.getItem("token");
 

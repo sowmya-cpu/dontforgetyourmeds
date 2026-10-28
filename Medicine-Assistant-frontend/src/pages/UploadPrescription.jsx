@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createWorker } from "tesseract.js";
+import { toast } from "react-toastify";
+import { syncReminderSchedules } from "../utils/reminderSync";
 
 import {
   saveMedicine,
-  getAllMedicines,
+  getMedicinesByUser,
     updateMedicine as updateMedicineRecord,
    getMedicineById,
 } from "../database/medicineDB";
@@ -607,7 +609,7 @@ function UploadPrescription() {
      SAVE PRESCRIPTION
   ======================================================= */
 
-  const handleMedicineImageChange = (medicineId, event) => {
+const handleMedicineImageChange = (medicineId, event) => {
   const image = event.target.files?.[0];
 
   if (!image) return;
@@ -634,231 +636,242 @@ function UploadPrescription() {
 
   setError("");
 };
-  const handleSavePrescription = async () => {
-    // Immediately block repeated clicks.
-    if (saveLock.current) {
-      return;
+  
+const handleSavePrescription = async () => {
+  if (saveLock.current) return;
+
+  saveLock.current = true;
+
+  const email = localStorage
+    .getItem("email")
+    ?.trim()
+    .toLowerCase();
+
+  if (!email) {
+    toast.error("Please log in again.");
+    saveLock.current = false;
+    setSaving(false);
+    return;
+  }
+
+  setSaving(true);
+  setError("");
+  setSuccess("");
+
+  try {
+    if (!file || medicines.length === 0) {
+      throw new Error("Analyze a prescription before saving it.");
     }
 
-    saveLock.current = true;
-    setSaving(true);
-    setError("");
-    setSuccess("");
+    const incompleteIndex = medicines.findIndex(
+      (medicine) =>
+        !medicine.medicineName?.trim() ||
+        !medicine.strength?.trim() ||
+        !medicine.dosage?.trim() ||
+        !medicine.frequency?.trim() ||
+        !medicine.duration?.trim()
+    );
 
-    try {
-      if (!file || medicines.length === 0) {
-        throw new Error(
-          "Analyze a prescription before saving it."
-        );
+    if (incompleteIndex !== -1) {
+      const medicine = medicines[incompleteIndex];
+      const missingFields = [];
+
+      if (!medicine.medicineName?.trim())
+        missingFields.push("medicine name");
+      if (!medicine.strength?.trim())
+        missingFields.push("strength");
+      if (!medicine.dosage?.trim())
+        missingFields.push("dosage");
+      if (!medicine.frequency?.trim())
+        missingFields.push("frequency");
+      if (!medicine.duration?.trim())
+        missingFields.push("duration");
+
+      throw new Error(
+        `Complete the required fields for Medicine ${
+          incompleteIndex + 1
+        }: ${missingFields.join(", ")}.`
+      );
+    }
+
+    if (!hasConfirmedReview) {
+      throw new Error(
+        "Please confirm that you checked the medicine details against the original prescription."
+      );
+    }
+
+    const record = {
+      id:
+        currentPrescriptionId.current ||
+        `prescription-${Date.now()}`,
+      userEmail: email,
+      createdAt: new Date().toISOString(),
+      imageName: file.name,
+      imageType: file.type,
+      imageBlob: file,
+      medicines: medicines.map(
+        ({ missingFields, reviewRequired, ...medicine }) =>
+          medicine
+      ),
+      remindersActivated: false,
+    };
+
+    // Load only the current user's medicines.
+    let existingMedicines = await getMedicinesByUser(email);
+
+    if (!Array.isArray(existingMedicines)) {
+      existingMedicines = [];
+    }
+
+    const savedRecord = await savePrescriptionLocally(
+      record,
+      async (candidateRecord) => {
+        const medicineWithoutImage =
+          record.medicines.findIndex((medicine) => {
+            const existingMedicine = existingMedicines.find(
+              (item) =>
+                item.userEmail?.trim().toLowerCase() === email &&
+                item.prescriptionRecordId === candidateRecord.id &&
+                (
+                  item.prescriptionMedicineId === medicine.id ||
+                  item.medicineName?.trim().toLowerCase() ===
+                    medicine.medicineName?.trim().toLowerCase()
+                )
+            );
+
+            return (
+              !medicine.medicineImage &&
+              !existingMedicine?.medicineImage
+            );
+          });
+
+        if (medicineWithoutImage !== -1) {
+          throw new Error(
+            `Please upload an image for Medicine ${
+              medicineWithoutImage + 1
+            }.`
+          );
+        }
       }
+    );
 
-      // Validate required medicine details.
-      const incompleteIndex = medicines.findIndex(
-        (medicine) =>
-          !medicine.medicineName.trim() ||
-          !medicine.strength.trim() ||
-          !medicine.dosage.trim() ||
-          !medicine.frequency.trim() ||
-          !medicine.duration.trim()
+    for (const medicine of record.medicines) {
+      const durationMatch = String(
+        medicine.duration
+      ).match(/^\s*(\d+)\s*(.*)\s*$/);
+
+      // Match only medicines belonging to this user.
+      const existingMedicine = existingMedicines.find(
+        (item) =>
+          item.userEmail?.trim().toLowerCase() === email &&
+          item.prescriptionRecordId === savedRecord.id &&
+          (
+            item.prescriptionMedicineId === medicine.id ||
+            item.medicineName?.trim().toLowerCase() ===
+              medicine.medicineName?.trim().toLowerCase()
+          )
       );
 
-      if (incompleteIndex !== -1) {
-        const medicine = medicines[incompleteIndex];
-        const missingFields = [];
+      const medicineData = {
+        medicineName: medicine.medicineName,
+        strength: medicine.strength,
+        dose: medicine.dosage,
+        frequency: medicine.frequency,
+        foodInstruction:
+          medicine.foodInstruction || "After food",
+        purpose: "",
+        timesOfDay: (() => {
+            const instruction = String(
+              medicine.instructions || ""
+            ).toLowerCase();
 
-        if (!medicine.medicineName.trim()) {
-          missingFields.push("medicine name");
-        }
+            if (
+              instruction.includes("morning") ||
+              instruction.includes("after breakfast")
+            ) {
+              return ["Morning"];
+            }
 
-        if (!medicine.strength.trim()) {
-          missingFields.push("strength");
-        }
+            if (
+              instruction.includes("afternoon") ||
+              instruction.includes("after lunch")
+            ) {
+              return ["Afternoon"];
+            }
 
-        if (!medicine.dosage.trim()) {
-          missingFields.push("dosage");
-        }
+            if (
+              instruction.includes("night") ||
+              instruction.includes("bedtime") ||
+              instruction.includes("after dinner")
+            ) {
+              return ["Night"];
+            }
 
-        if (!medicine.frequency.trim()) {
-          missingFields.push("frequency");
-        }
-
-        if (!medicine.duration.trim()) {
-          missingFields.push("duration");
-        }
-
-        throw new Error(
-          `Complete the required fields for Medicine ${incompleteIndex + 1}: ${missingFields.join(", ")}.`
-        );
-      }
-      if (!hasConfirmedReview) {
-        throw new Error(
-          "Please confirm that you checked the medicine details against the original prescription."
-        );
-      }
-
-      const record = {
-        id:
-          currentPrescriptionId.current ||
-          `prescription-${Date.now()}`,
-
-        createdAt: new Date().toISOString(),
-
-        imageName: file.name,
-        imageType: file.type,
-        imageBlob: file,
-
-        medicines: medicines.map(
-          ({ missingFields, reviewRequired, ...medicine }) =>
-            medicine
-        ),
-
-        remindersActivated: false,
+            return [];
+          })(),
+        startDate: prescriptionStartDate,
+        duration: durationMatch
+          ? durationMatch[1]
+          : medicine.duration,
+        durationUnit: durationMatch
+          ? durationMatch[2].trim()
+          : "",
+        prescriptionRecordId: savedRecord.id,
+        prescriptionMedicineId: medicine.id,
+        medicineImage:
+          medicine.medicineImage ??
+          existingMedicine?.medicineImage,
+        userEmail: email,
       };
 
-      // This function checks existing records by image fingerprint.
-      // It updates an existing prescription instead of adding a duplicate.
-      // Check existing medicines before saving the prescription so an
-      // existing image can be retained when no replacement is selected.
-      let existingMedicines;
-      const savedRecord = await savePrescriptionLocally(
-        record,
-        async (candidateRecord) => {
-          existingMedicines = await getAllMedicines();
-
-          const medicineWithoutImage = record.medicines.findIndex(
-            (medicine) => {
-              const existingMedicine = existingMedicines.find(
-                (item) =>
-                  item.prescriptionRecordId === candidateRecord.id &&
-                  (
-                    item.prescriptionMedicineId === medicine.id ||
-                    item.medicineName?.trim().toLowerCase() ===
-                      medicine.medicineName?.trim().toLowerCase()
-                  )
-              );
-
-              return (
-                !medicine.medicineImage &&
-                !existingMedicine?.medicineImage
-              );
-            }
-          );
-
-          if (medicineWithoutImage !== -1) {
-            throw new Error(
-              `Please upload an image for Medicine ${medicineWithoutImage + 1}.`
-            );
-          }
-        }
-      );
-
-      for (const medicine of record.medicines) {
-        const durationMatch = String(medicine.duration).match(
-          /^\s*(\d+)\s*(.*)\s*$/
-        );
-              console.log(
-  "Image before saving:",
-  medicine.medicineName,
-  medicine.medicineImage
-);
-        const existingMedicine = existingMedicines.find(
-          (item) =>
-            item.prescriptionRecordId === savedRecord.id &&
-            (
-              item.prescriptionMedicineId === medicine.id ||
-              item.medicineName?.trim().toLowerCase() ===
-                medicine.medicineName?.trim().toLowerCase()
-            )
-        );
-
-        const medicineData = {
-          medicineName: medicine.medicineName,
-          strength: medicine.strength,
-
-          // Map prescription data to medicineDB fields.
-          dose: medicine.dosage,
-          frequency: medicine.frequency,
-          foodInstruction: medicine.foodInstruction || "After food",
-
-          purpose: "",
-          timesOfDay: medicine.timesOfDay?.length
-            ? medicine.timesOfDay
-            : medicine.instructions
-              ? [medicine.instructions]
-              : [],
-
-          // Use the date extracted from the prescription.
-          startDate:
-            prescriptionStartDate,
-
-          duration: durationMatch
-            ? durationMatch[1]
-            : medicine.duration,
-
-          durationUnit: durationMatch
-            ? durationMatch[2].trim()
-            : "",
-
-          // Link the medicine to its prescription.
-          prescriptionRecordId: savedRecord.id,
-          prescriptionMedicineId: medicine.id,
-          medicineImage:
-            medicine.medicineImage ?? existingMedicine?.medicineImage,
-        };
-
-    let savedMedicine;
-
-if (existingMedicine) {
-  console.log("Old image:", existingMedicine.medicineImage);
-  console.log("New image:", medicineData.medicineImage);
-
-  await updateMedicineRecord({
-    ...existingMedicine,
-    ...medicineData,
-  });
-
-  const updatedMedicine = await getMedicineById(existingMedicine.id);
-
-  console.log("Image after update:", updatedMedicine.medicineImage);
-}else {
-  const newId = await saveMedicine(medicineData);
-const savedCheck = await getAllMedicines();
-
-console.log(
-  "Image in IndexedDB after save:",
-  savedCheck.find(
-    (item) =>
-      item.prescriptionRecordId === savedRecord.id &&
-      item.prescriptionMedicineId === medicine.id
-  )?.medicineImage
-);
-  savedMedicine = {
-    ...medicineData,
-    id: newId,
-  };
-}
-
+      if (existingMedicine) {
+        // Update only a record owned by this user.
+        await updateMedicineRecord({
+          ...existingMedicine,
+          ...medicineData,
+          id: existingMedicine.id,
+          userEmail: email,
+        });
+      } else {
+        // Never update another user's medicine.
+        await saveMedicine(medicineData);
       }
-
-      currentPrescriptionId.current = savedRecord.id;
-
-      setSuccess(
-        "Prescription saved successfully. Duplicate records for this image have been checked."
-      );
-
-      navigate("/medicines");
-    } catch (err) {
-      console.error("Save prescription error:", err);
-
-      setError(
-        err.message ||
-          "Could not save the prescription on this device."
-      );
-    } finally {
-      saveLock.current = false;
-      setSaving(false);
     }
-  };  /* =======================================================
+
+    // Sync reminders after all prescription medicines are saved.
+    try {
+      await syncReminderSchedules();
+      console.log("Prescription reminders synced successfully.");
+    } catch (reminderError) {
+      console.error(
+        "Prescription reminder sync failed:",
+        reminderError
+      );
+    }
+
+    currentPrescriptionId.current = savedRecord.id;
+
+    setSuccess(
+      "Prescription saved successfully."
+    );
+
+    navigate("/medicines");
+  } catch (err) {
+    console.error("Save prescription error:", err);
+
+    setError(
+      err.message ||
+        "Could not save the prescription on this device."
+    );
+  } finally {
+    saveLock.current = false;
+    setSaving(false);
+  }
+};
+
+  
+  
+  /* =======================================================
      UI
   ======================================================= */
 
