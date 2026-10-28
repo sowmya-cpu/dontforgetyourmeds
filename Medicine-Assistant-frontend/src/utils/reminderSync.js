@@ -7,7 +7,7 @@ import {
 } from "../database/medicineDB";
 import { toast } from "react-toastify";
 
-const API_URL = "http://localhost:8080/api/reminders/sync";
+const API_URL = "https://dontforgetyourmeds.onrender.com/api/reminders/sync";
 
 const STORAGE_KEY = "medicineNotificationIds";
 

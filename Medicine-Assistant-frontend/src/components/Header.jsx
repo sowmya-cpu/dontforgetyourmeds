@@ -20,7 +20,7 @@ function Header() {
 
       try {
         const response = await fetch(
-          "http://localhost:8080/api/auth/profile",
+          "https://dontforgetyourmeds.onrender.com/api/auth/profile",
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },

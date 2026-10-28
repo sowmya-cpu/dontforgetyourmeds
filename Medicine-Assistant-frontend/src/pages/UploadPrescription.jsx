@@ -11,7 +11,7 @@ import {
    getMedicineById,
 } from "../database/medicineDB";
 
-const API_URL = "http://localhost:8080/api/prescription-ai/analyze";
+const API_URL = "https://dontforgetyourmeds.onrender.com/api/prescription-ai/analyze";
 const DATABASE_NAME = "MedicationAssistantPrescriptionDB";
 const STORE_NAME = "prescriptions";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;

@@ -15,9 +15,9 @@ function Login() {
 
   const checkPasskeyStatus = async (authToken) => {
   console.log("Checking passkey status...");
-  console.log("Sending request to:", "http://localhost:8080/api/webauthn/status");
+  console.log("Sending request to:", "https://dontforgetyourmeds.onrender.com/api/webauthn/status");
     const response = await fetch(
-      "http://localhost:8080/api/webauthn/status",
+      "https://dontforgetyourmeds.onrender.com/api/webauthn/status",
       {
         method: "GET",
         headers: {
@@ -38,7 +38,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8080/api/auth/login", {
+      const response = await fetch("https://dontforgetyourmeds.onrender.com/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

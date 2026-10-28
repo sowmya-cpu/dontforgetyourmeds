@@ -4,7 +4,7 @@ import {
 } from "@simplewebauthn/browser";
 export async function registerDevice(token) {
     const response = await fetch(
-        "http://localhost:8080/api/webauthn/register/start",
+        "https://dontforgetyourmeds.onrender.com/api/webauthn/register/start",
         {
             method: "POST",
             headers: {
@@ -45,7 +45,7 @@ export async function registerDevice(token) {
     });
 
     const result = await fetch(
-        "http://localhost:8080/api/webauthn/register/finish",
+        "https://dontforgetyourmeds.onrender.com/api/webauthn/register/finish",
         {
             method: "POST",
             headers: {
@@ -65,7 +65,7 @@ export async function registerDevice(token) {
 export async function authenticateDevice(token) {
     // Step 1: Request authentication options from the backend
     const response = await fetch(
-        "http://localhost:8080/api/webauthn/authenticate/start",
+        "https://dontforgetyourmeds.onrender.com/api/webauthn/authenticate/start",
         {
             method: "POST",
             headers: {
@@ -116,7 +116,7 @@ export async function authenticateDevice(token) {
 
     // Step 4: Send the authentication response to the backend
     const result = await fetch(
-        "http://localhost:8080/api/webauthn/authenticate/finish",
+        "https://dontforgetyourmeds.onrender.com/api/webauthn/authenticate/finish",
         {
             method: "POST",
             headers: {
