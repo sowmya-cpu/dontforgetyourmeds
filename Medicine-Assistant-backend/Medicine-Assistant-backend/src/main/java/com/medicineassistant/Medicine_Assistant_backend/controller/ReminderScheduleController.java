@@ -1,7 +1,6 @@
 package com.medicineassistant.Medicine_Assistant_backend.controller;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
@@ -58,27 +57,8 @@ public class ReminderScheduleController {
                         .body(Map.of("error", "User not found"));
             }
 
-            LocalTime reminderTime;
-
-            switch (timeOfDay) {
-                case "Morning":
-                    reminderTime = LocalTime.of(8, 0);
-                    break;
-                case "Afternoon":
-                    reminderTime = LocalTime.of(13, 0);
-                    break;
-                default:
-                    reminderTime = LocalTime.of(20, 0);
-                    break;
-            }
-
-            LocalDateTime now = LocalDateTime.now();
             LocalDateTime scheduledAt =
-                    now.toLocalDate().atTime(reminderTime);
-
-            if (!scheduledAt.isAfter(now)) {
-                scheduledAt = scheduledAt.plusDays(1);
-            }
+                    reminderScheduleService.getNextReminderTime(timeOfDay);
 
             reminderScheduleService.saveReminderSchedule(
                     user.getId(),
