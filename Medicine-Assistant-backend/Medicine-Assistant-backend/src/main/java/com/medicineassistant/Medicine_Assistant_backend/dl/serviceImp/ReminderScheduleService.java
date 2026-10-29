@@ -71,6 +71,7 @@ public class ReminderScheduleService {
             if (existing.isPresent()) {
                 ReminderScheduleEntity schedule = existing.get();
                 schedule.setEnabled(true);
+                schedule.setScheduledAt(getNextReminderTime(slot));
             } else {
                 LocalDateTime scheduledAt =
                         getNextReminderTime(slot);
@@ -88,14 +89,14 @@ public class ReminderScheduleService {
 
         int hour = switch (slot) {
             case "Morning" -> 8;
-            case "Afternoon" -> 13;
+            case "Afternoon" -> 14;
             case "Night" -> 20;
             default -> throw new IllegalArgumentException(
                 "Invalid reminder slot");
         };
-
+        int minute = slot.equals("Afternoon") ? 20 : 0;
         LocalDateTime next = now.toLocalDate()
-                .atTime(hour, 0);
+                .atTime(hour, minute);
 
         if (!next.isAfter(now)) {
             next = next.plusDays(1);
