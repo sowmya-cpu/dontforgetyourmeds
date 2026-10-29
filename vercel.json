@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd Medicine-Assistant-frontend && npm install && npm run build",
-  "outputDirectory": "Medicine-Assistant-frontend/dist",
-  "installCommand": "echo Skipping root install"
+  "installCommand": "cd Medicine-Assistant-frontend && npm install",
+  "buildCommand": "cd Medicine-Assistant-frontend && npm run build",
+  "outputDirectory": "Medicine-Assistant-frontend/dist"
 }
