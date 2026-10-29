@@ -56,19 +56,26 @@ public class SecurityConfig {
 	    CorsConfiguration configuration = new CorsConfiguration();
 
 	    configuration.setAllowedOrigins(
-	        List.of("http://localhost:5173",  "http://localhost:4173")
+	        List.of(
+	            "http://localhost:5173",
+	            "http://localhost:4173",
+	            "https://dontforgetyourmeds-4rkf.vercel.app/"
+	        )
 	    );
 
 	    configuration.setAllowedMethods(
 	        List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
 	    );
 
-	    configuration.setAllowedHeaders(
-	        List.of("*")
-	    );
+	    configuration.setAllowedHeaders(List.of("*"));
+
+	    // Keep this if your frontend uses cookies for authentication.
+	    // If using Bearer JWT tokens in Authorization headers only,
+	    // it may not be necessary.
+	    configuration.setAllowCredentials(true);
 
 	    UrlBasedCorsConfigurationSource source =
-	            new UrlBasedCorsConfigurationSource();
+	        new UrlBasedCorsConfigurationSource();
 
 	    source.registerCorsConfiguration("/**", configuration);
 
