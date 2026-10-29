@@ -16,7 +16,7 @@ public class WebAuthnConfig {
     public RelyingParty relyingParty(WebAuthnCredentialStore credentialStore) {
 
         RelyingPartyIdentity identity = RelyingPartyIdentity.builder()
-                .id("localhost")
+                .id("dontforgetyourmeds-4rkf.vercel.app")
                 .name("Medication Assistant")
                 .build();
 
