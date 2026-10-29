@@ -23,7 +23,11 @@ public class WebAuthnConfig {
         return RelyingParty.builder()
                 .identity(identity)
                 .credentialRepository(credentialStore)
-                .origins(Set.of("http://localhost:5173"))
+                .origins(Set.of(
+                    "http://localhost:5173",
+                    "http://localhost:4173",
+                    "https://dontforgetyourmeds-4rkf.vercel.app"
+                ))
                 .build();
     }
 }
