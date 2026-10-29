@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd Medicine-Assistant-frontend && npm install",
-  "buildCommand": "cd Medicine-Assistant-frontend && npm run build",
-  "outputDirectory": "Medicine-Assistant-frontend/dist"
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
