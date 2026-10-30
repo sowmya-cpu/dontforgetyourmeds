@@ -329,7 +329,7 @@ useEffect(() => {
             >
               {pushLoading
                 ? "Please wait..."
-                : "Save / Sync Push Subscription"}
+                : "Save / Syncs Push Subscription"}
             </button>
 
             <button
