@@ -58,34 +58,32 @@ function Profile() {
   }, [navigate]);
 
   // Check existing browser push subscription
-  useEffect(() => {
-    const checkPushSubscription = async () => {
-      try {
-        if (
-          !("serviceWorker" in navigator) ||
-          !("PushManager" in window)
-        ) {
-          setPushSubscribed(false);
-          return;
-        }
-
-        const registration =
-          await navigator.serviceWorker.ready;
-
-        const subscription =
-          await registration.pushManager.getSubscription();
-
-        setPushSubscribed(Boolean(subscription));
-      } catch (error) {
-        console.error(
-          "Push subscription check error:",
-          error
-        );
+useEffect(() => {
+  const checkPushSubscription = async () => {
+    try {
+      if (
+        !("serviceWorker" in navigator) ||
+        !("PushManager" in window)
+      ) {
+        setPushSubscribed(false);
+        return;
       }
-    };
 
-    checkPushSubscription();
-  }, []);
+      const registration = await navigator.serviceWorker.ready;
+
+      const subscription =
+        await registration.pushManager.getSubscription();
+
+      // Do not assume browser subscription is saved in backend
+      setPushSubscribed(false);
+    } catch (error) {
+      console.error("Push subscription check error:", error);
+      setPushSubscribed(false);
+    }
+  };
+
+  checkPushSubscription();
+}, []);
 
   // Enable or disable medicine reminders
   const handleReminderToggle = async (event) => {
@@ -325,26 +323,20 @@ function Profile() {
           <div className="d-flex flex-wrap gap-2">
             <button
               type="button"
-              className={`btn ${
-                pushSubscribed
-                  ? "btn-success"
-                  : "btn-primary"
-              }`}
+              className="btn btn-primary"
               onClick={handleSavePushSubscription}
-              disabled={pushLoading || pushSubscribed}
+              disabled={pushLoading}
             >
               {pushLoading
                 ? "Please wait..."
-                : pushSubscribed
-                ? "Subscribed ✓"
-                : "Save Push Subscription"}
+                : "Save / Sync Push Subscription"}
             </button>
 
             <button
               type="button"
               className="btn btn-outline-secondary"
               onClick={handleSendTestNotification}
-              disabled={pushLoading || !pushSubscribed}
+              disabled={pushLoading}
             >
               Send Test Notification
             </button>
