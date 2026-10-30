@@ -13,7 +13,7 @@ const STORAGE_KEY = "medicineNotificationIds";
 
 const REMINDER_TIMES = {
   Morning: { hour: 8, minute: 0 },
-  Afternoon: { hour: 18, minute: 20 },
+  Afternoon: { hour: 13, minute: 0 },
   Night: { hour: 20, minute: 0 },
 };
 

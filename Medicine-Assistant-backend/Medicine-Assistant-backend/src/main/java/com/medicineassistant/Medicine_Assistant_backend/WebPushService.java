@@ -5,6 +5,7 @@ import java.security.GeneralSecurityException;
 import java.security.Security;
 import java.time.LocalDateTime;
 
+import org.apache.http.HttpResponse;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -110,7 +111,12 @@ public class WebPushService {
         Notification notification =
                 new Notification(subscription, payload);
 
-        pushService.send(notification);
+        HttpResponse response = pushService.send(notification);
+        int statusCode = response.getStatusLine().getStatusCode();
+
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new PushDeliveryException(statusCode);
+        }
     }
 
     public void sendToSubscription(
@@ -131,5 +137,19 @@ public class WebPushService {
         return value
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"");
+    }
+
+    public static class PushDeliveryException extends Exception {
+
+        private final int statusCode;
+
+        public PushDeliveryException(int statusCode) {
+            super("Push service returned HTTP " + statusCode);
+            this.statusCode = statusCode;
+        }
+
+        public int getStatusCode() {
+            return statusCode;
+        }
     }
 }
