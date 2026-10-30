@@ -118,11 +118,11 @@ public class ReminderScheduleService {
         int hour = switch (slot) {
             case "Morning" -> 8;
             case "Afternoon" -> 11;
-            case "Night" -> 20;
+            case "Night" -> 17;
             default -> throw new IllegalArgumentException(
                 "Invalid reminder slot");
         };
-        int minute = (slot.equals("Afternoon")) ? 10 : 0;;
+        int minute = (slot.equals("Night")) ? 15 : 0;;
         LocalDateTime next = now.toLocalDate()
                 .atTime(hour, minute);
  
