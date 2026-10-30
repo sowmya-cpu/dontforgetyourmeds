@@ -140,7 +140,7 @@ function Header() {
 
       {/* Notifications and Profile */}
       <div className="d-flex align-items-center gap-3">
-        <div className="position-relative">
+        {/* <div className="position-relative">
           <button
             type="button"
             className="btn btn-light position-relative"
@@ -215,7 +215,7 @@ function Header() {
               </div>
             </div>
           )}
-        </div>
+        </div> */}
 
         <button
           type="button"

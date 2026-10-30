@@ -32,7 +32,7 @@ function Dashboard() {
   return (
     <div className="container py-4">
       {/* Next Medicine */}
-      <div className="card border-0 shadow-sm mb-4">
+      {/* <div className="card border-0 shadow-sm mb-4">
         <div className="card-body d-flex justify-content-between align-items-center">
           <div>
             <small className="text-muted">Next Medicine</small>
@@ -50,7 +50,7 @@ function Dashboard() {
 
           <span className="fs-3">›</span>
         </div>
-      </div>
+      </div> */}
 
       {/* Quick Action Cards */}
       <div className="row g-3">
@@ -160,7 +160,7 @@ function Dashboard() {
       </div>
 
       {/* Temporary WebAuthn Test */}
-      <div className="card border-0 shadow-sm mt-4">
+      {/* <div className="card border-0 shadow-sm mt-4">
         <div className="card-body text-center p-4">
           <h5 className="fw-bold">Device Authentication</h5>
 
@@ -176,7 +176,7 @@ function Dashboard() {
             Test Device Authentication
           </button>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
