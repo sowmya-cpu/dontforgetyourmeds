@@ -112,9 +112,22 @@ public class WebPushService {
                 new Notification(subscription, payload);
 
         HttpResponse response = pushService.send(notification);
-        int statusCode = response.getStatusLine().getStatusCode();
 
+        int statusCode = response.getStatusLine().getStatusCode();
+        
+        String responseBody = "";
+        
+        if (response.getEntity() != null) {
+            responseBody = org.apache.http.util.EntityUtils.toString(
+                response.getEntity()
+            );
+        }
+        
+        System.out.println("Push HTTP Status: " + statusCode);
+        
         if (statusCode < 200 || statusCode >= 300) {
+            System.err.println("Push Service Error: " + responseBody);
+        
             throw new PushDeliveryException(statusCode);
         }
     }
